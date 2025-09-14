@@ -5,7 +5,6 @@ const path = require('path');
 const os = require('os');
 
 // Vercelの環境変数を取得
-// 環境変数のキー名をCHATWORK_API_TOKENに変更
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
 
 // Bot自身のアカウントIDを保持する変数
@@ -54,17 +53,31 @@ module.exports = async (req, res) => {
             return res.status(200).send("Bot's own message, skipped.");
         }
 
-        const isImageRequest = body.includes('画像送ってみて');
+        // 絵文字のカウントはデフォルトで0に設定
         let emojiCount = 0;
 
-        if (!isImageRequest) {
-            EMOJIS_TO_COUNT.forEach(emoji => {
-                emojiCount += (body.match(new RegExp(emoji.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g')) || []).length;
+        // --- ここから新しいロジックを追加 ---
+        if (body.includes('test')) {
+            console.log(`「test」リクエストを受信しました。`);
+
+            // 現在の時間を取得
+            const now = new Date();
+            const replyMessage = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n現在の時刻は ${now.toLocaleString('ja-JP')} です。`;
+
+            const headers = { 'X-ChatWorkToken': CHATWORK_API_TOKEN };
+            await axios.post(`https://api.chatwork.com/v2/rooms/${roomId}/messages`, {
+                body: replyMessage
+            }, {
+                headers: headers
             });
+
+            console.log('時刻の返信が完了しました。');
+            return res.status(200).send('Time replied.');
         }
+        // --- ここまで新しいロジックを追加 ---
 
-        console.log(`投稿者ID: ${accountId}, 投稿部屋ID: ${roomId}, 絵文字カウント: ${emojiCount}`);
 
+        const isImageRequest = body.includes('画像送ってみて');
         if (isImageRequest) {
             console.log(`画像リクエストを受信しました。部屋ID: ${roomId}, 送信者ID: ${accountId}`);
 
@@ -97,6 +110,14 @@ module.exports = async (req, res) => {
 
             return res.status(200).send('Image sent.');
         }
+
+        if (!isImageRequest) {
+            EMOJIS_TO_COUNT.forEach(emoji => {
+                emojiCount += (body.match(new RegExp(emoji.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g')) || []).length;
+            });
+        }
+        
+        console.log(`投稿者ID: ${accountId}, 投稿部屋ID: ${roomId}, 絵文字カウント: ${emojiCount}`);
 
         if (emojiCount >= 15) {
             const headers = { 'X-ChatWorkToken': CHATWORK_API_TOKEN };
