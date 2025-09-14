@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
-const fs = require('fs').promises;
+const fs = require('fs'); // 通常のfsモジュール
+const fsp = require('fs').promises; // fs.promisesモジュール
 const path = require('path');
 const FormData = require('form-data');
 const app = express();
@@ -10,7 +11,6 @@ const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
 
 // ウェブフックのエンドポイント
 app.post('/webhook', async (req, res) => {
-  // Webhookペイロードから必要な情報を直接抽出する
   const webhookEvent = req.body.webhook_event;
   if (!webhookEvent) {
     console.error("Invalid webhook payload received.");
@@ -32,13 +32,13 @@ app.post('/webhook', async (req, res) => {
     try {
       // 1. 画像をダウンロードして一時ファイルに保存
       const filePath = await downloadRandomImage();
-      
+
       // 2. Chatworkにファイルをアップロード
       const fileId = await uploadImageToChatwork(filePath, roomId);
-      
+
       // 3. ファイルIDを含めて返信メッセージを送信
       await sendFileReply(fileId, { accountId, roomId, messageId });
-      
+
       return res.sendStatus(200);
     } catch (error) {
       console.error("画像送信処理でエラーが発生:", error);
@@ -65,7 +65,8 @@ async function downloadRandomImage() {
     const response = await axios.get(imageUrl, {
       responseType: 'arraybuffer'
     });
-    await fs.writeFile(filePath, response.data);
+    // fs.promisesのwriteFileを使用
+    await fsp.writeFile(filePath, response.data);
     console.log("画像ダウンロード成功:", filePath);
     return filePath;
   } catch (error) {
@@ -86,6 +87,7 @@ async function downloadRandomImage() {
 async function uploadImageToChatwork(filePath, roomId) {
   try {
     const formData = new FormData();
+    // 通常のfs.createReadStreamを使用
     formData.append('file', fs.createReadStream(filePath));
 
     const response = await axios.post(
@@ -104,9 +106,9 @@ async function uploadImageToChatwork(filePath, roomId) {
     console.error("ファイルアップロードエラー:", error.response?.data || error.message);
     throw error;
   } finally {
-    // 成功・失敗に関わらず、ファイルを削除
+    // fs.promisesのunlinkを使用
     try {
-        await fs.unlink(filePath);
+        await fsp.unlink(filePath);
         console.log("一時ファイルを削除しました:", filePath);
     } catch (err) {
         console.error("一時ファイルの削除に失敗しました:", err);
