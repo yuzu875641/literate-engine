@@ -1,0 +1,13 @@
+{
+  "name": "chatwork-bot",
+  "version": "1.0.0",
+  "description": "Chatwork bot for Vercel",
+  "main": "api/webhook.js",
+  "scripts": {
+    "start": "node api/webhook.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "form-data": "^4.0.0"
+  }
+}
