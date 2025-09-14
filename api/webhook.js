@@ -7,8 +7,6 @@ const os = require('os');
 // Vercelの環境変数からAPIトークンを取得
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
 
-let BOT_ACCOUNT_ID = null;
-
 // 監視対象の絵文字リスト
 const EMOJIS_TO_COUNT = [
     ':)', ':(', ':D', '8-)', ':o', ';)', ';(', '(sweat)', ':|', ':*', ':p', '(blush)',
@@ -18,31 +16,14 @@ const EMOJIS_TO_COUNT = [
     '(*)', '(h)', '(F)', '(cracker)', '(eat)', '(^)', '(coffee)', '(beer)', '(handshake)', '(y)'
 ];
 
-// 起動時にBotの情報を取得する関数
-async function setupBot() {
-    try {
-        console.log('Botのセットアップを開始します...');
-        const headers = { 'X-ChatWorkToken': CHATWORK_API_TOKEN };
-        const meResponse = await axios.get('https://api.chatwork.com/v2/me', { headers });
-        BOT_ACCOUNT_ID = meResponse.data.account_id;
-        console.log(`BotアカウントID: ${BOT_ACCOUNT_ID}`);
-    } catch (error) {
-        console.error('Botのセットアップ中にエラーが発生しました:', error.message);
-        if (error.response) {
-            console.error('APIレスポンスエラー:', `ステータスコード: ${error.response.status}, エラーメッセージ: ${JSON.stringify(error.response.data)}`);
-        }
-        throw new Error('Bot setup failed.');
-    }
-}
-
 // サーバーレス関数のハンドラ
 module.exports = async (req, res) => {
-    // リクエストごとにBot IDが設定されているか確認し、設定されていなければセットアップ
-    if (!BOT_ACCOUNT_ID) {
-        await setupBot();
-    }
-
     try {
+        // リクエストごとにBot IDを確実に取得
+        const headers = { 'X-ChatWorkToken': CHATWORK_API_TOKEN };
+        const meResponse = await axios.get('https://api.chatwork.com/v2/me', { headers });
+        const BOT_ACCOUNT_ID = meResponse.data.account_id;
+
         const { body, account_id: accountId, room_id: roomId, message_id: messageId, type } = req.body.webhook_event;
 
         // デバッグログを追加
@@ -58,7 +39,6 @@ module.exports = async (req, res) => {
         }
 
         let isActionTaken = false;
-        const headers = { 'X-ChatWorkToken': CHATWORK_API_TOKEN };
 
         // --- 「test」コマンドの処理 ---
         if (body.includes('test')) {
