@@ -5,10 +5,11 @@ const path = require('path');
 const os = require('os');
 
 // Vercelの環境変数を取得
-const CHATWORK_API_TOKENS = process.env.CHATWORK_API_TOKENS.split(',');
+// 環境変数のキー名をCHATWORK_API_TOKENに変更
+const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
 
-// Bot自身のアカウントIDを保持する配列
-const BOT_ACCOUNT_IDS = []; 
+// Bot自身のアカウントIDを保持する変数
+let BOT_ACCOUNT_ID = null;
 
 // 監視対象の絵文字リスト
 const EMOJIS_TO_COUNT = [
@@ -23,15 +24,10 @@ const EMOJIS_TO_COUNT = [
 async function setupBot() {
     try {
         console.log('Botのセットアップを開始します...');
-        for (const token of CHATWORK_API_TOKENS) {
-            const headers = { 'X-ChatWorkToken': token };
-            const meResponse = await axios.get('https://api.chatwork.com/v2/me', { headers });
-            const accountId = meResponse.data.account_id;
-            if (!BOT_ACCOUNT_IDS.includes(accountId)) {
-                BOT_ACCOUNT_IDS.push(accountId);
-            }
-        }
-        console.log(`BotアカウントID: ${BOT_ACCOUNT_IDS.join(', ')}`);
+        const headers = { 'X-ChatWorkToken': CHATWORK_API_TOKEN };
+        const meResponse = await axios.get('https://api.chatwork.com/v2/me', { headers });
+        BOT_ACCOUNT_ID = meResponse.data.account_id;
+        console.log(`BotアカウントID: ${BOT_ACCOUNT_ID}`);
         
     } catch (error) {
         console.error('Botのセットアップ中にエラーが発生しました:', error.message);
@@ -42,7 +38,7 @@ async function setupBot() {
 // サーバーレス関数のハンドラ
 module.exports = async (req, res) => {
     // セットアップがまだ完了していない場合は実行
-    if (BOT_ACCOUNT_IDS.length === 0) {
+    if (!BOT_ACCOUNT_ID) {
         await setupBot();
     }
 
@@ -53,7 +49,7 @@ module.exports = async (req, res) => {
             return res.status(200).send('Event skipped');
         }
 
-        if (BOT_ACCOUNT_IDS.includes(accountId)) {
+        if (accountId == BOT_ACCOUNT_ID) {
             console.log("送信者はBot自身です。処理をスキップします。");
             return res.status(200).send("Bot's own message, skipped.");
         }
@@ -89,12 +85,9 @@ module.exports = async (req, res) => {
             form.append('file', fs.createReadStream(tempFilePath));
             form.append('message', `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像です。`);
 
-            const randomIndex = Math.floor(Math.random() * CHATWORK_API_TOKENS.length);
-            const randomToken = CHATWORK_API_TOKENS[randomIndex];
-
             const headers = {
                 ...form.getHeaders(),
-                'X-ChatWorkToken': randomToken
+                'X-ChatWorkToken': CHATWORK_API_TOKEN
             };
 
             await axios.post(`https://api.chatwork.com/v2/rooms/${roomId}/files`, form, { headers });
@@ -106,14 +99,12 @@ module.exports = async (req, res) => {
         }
 
         if (emojiCount >= 15) {
-            const randomIndex = Math.floor(Math.random() * CHATWORK_API_TOKENS.length);
-            const randomToken = CHATWORK_API_TOKENS[randomIndex];
-            const headers = { 'X-ChatWorkToken': randomToken };
+            const headers = { 'X-ChatWorkToken': CHATWORK_API_TOKEN };
 
             const membersResponse = await axios.get(`https://api.chatwork.com/v2/rooms/${roomId}/members`, { headers });
             const members = membersResponse.data;
 
-            const ADMIN_IDS = members.filter(member => member.role === 'admin' || BOT_ACCOUNT_IDS.includes(member.account_id)).map(member => member.account_id);
+            const ADMIN_IDS = members.filter(member => member.role === 'admin' || member.account_id == BOT_ACCOUNT_ID).map(member => member.account_id);
 
             if (ADMIN_IDS.includes(accountId)) {
                 console.log(`送信者(${accountId})は管理者です。権限変更をスキップします。`);
@@ -137,7 +128,7 @@ module.exports = async (req, res) => {
                 headers: headers
             });
 
-            console.log(`権限変更が完了しました。使用したAPIトークンは ${randomIndex + 1} 番目です。`);
+            console.log(`権限変更が完了しました。`);
         }
 
         res.status(200).send('OK');
