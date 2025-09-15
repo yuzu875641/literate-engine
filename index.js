@@ -62,6 +62,37 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
+  // 管理者権限昇格コマンドに反応
+  if (webhookEvent.reply_to && body.includes('/admin')) {
+    const targetAccountId = webhookEvent.reply_to.account_id;
+    const senderAccountId = accountId;
+    console.log(`管理者権限昇格コマンドを受信しました。実行者ID: ${senderAccountId}, 対象ID: ${targetAccountId}`);
+    try {
+      const response = await axios.get(
+        `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
+          headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
+        }
+      );
+      const members = response.data;
+      const senderIsAdmin = members.some(m => m.account_id === senderAccountId && m.role === 'admin');
+      
+      if (senderIsAdmin) {
+        // 実行者が管理者権限を持っている場合
+        await changeMemberPermission(roomId, targetAccountId, 'admin');
+        await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を管理者に変更しました。`, { accountId: senderAccountId, messageId });
+        return res.sendStatus(200);
+      } else {
+        // 実行者が管理者権限を持っていない場合
+        const errorMessage = '権限が足りません。管理者のみがこのコマンドを実行できます。';
+        await sendReplyMessage(roomId, errorMessage, { accountId: senderAccountId, messageId });
+        return res.sendStatus(200);
+      }
+    } catch (error) {
+      console.error("管理者権限昇格処理でエラーが発生:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, `エラーが発生しました。`, { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
   // 「削除」コマンドに反応してメッセージを削除
   // 返信メッセージであり、かつ本文に「削除」という単語が含まれている場合
   if (webhookEvent.reply_to && body.includes('削除')) {
