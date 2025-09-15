@@ -48,6 +48,7 @@ app.post('/webhook', async (req, res) => {
       console.log(`メッセージID ${targetMessageId} の削除コマンドを受信しました。`);
       try {
         await deleteMessage(targetRoomId, targetMessageId);
+        // 成功時の完了メッセージは送信しない
         return res.sendStatus(200);
       } catch (error) {
         console.error("メッセージ削除でエラー:", error.response?.data || error.message);
@@ -152,7 +153,7 @@ app.post('/webhook', async (req, res) => {
     try {
       const filePath = await generateQRCodeImage(textToEncode);
       const fileId = await uploadImageToChatwork(filePath, roomId);
-      const qrMessage = `QRコードだよ！\n[file:${fileId}]`;
+      const qrMessage = `QRコードだよ！`;
       await sendReplyMessage(roomId, qrMessage, { accountId, messageId });
       return res.sendStatus(200);
     } catch (error) {
@@ -262,7 +263,7 @@ app.post('/webhook', async (req, res) => {
     try {
       const filePath = await downloadRandomImage();
       const fileId = await uploadImageToChatwork(filePath, roomId);
-      const imageMessage = `画像だよ！\n[file:${fileId}]`;
+      const imageMessage = `画像だよ！`;
       await sendReplyMessage(roomId, imageMessage, { accountId, messageId });
       return res.sendStatus(200);
     } catch (error) {
@@ -286,6 +287,30 @@ async function generateQRCodeImage(text) {
     return filePath;
   } catch (error) {
     console.error("QRコード生成エラー:", error);
+    throw error;
+  }
+}
+
+/**
+ * 通常のメッセージを送信します（返信形式ではない）。
+ * @param {string} roomId 送信先のルームID
+ * @param {string} message 送信するメッセージ本文
+ */
+async function sendMessage(roomId, message) {
+  try {
+    await axios.post(
+      `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
+      new URLSearchParams({ body: message }),
+      {
+        headers: {
+          "X-ChatWorkToken": CHATWORK_API_TOKEN,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+    console.log("通常メッセージ送信成功");
+  } catch (error) {
+    console.error("通常メッセージ送信エラー:", error.response?.data || error.message);
     throw error;
   }
 }
