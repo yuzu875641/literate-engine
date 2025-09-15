@@ -61,6 +61,43 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
+  // YouTubeの動画URLに反応する
+  const youtubeUrlRegex = /\/youtube\/(https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/watch\?v=)[a-zA-Z0-9_-]+)/;
+  const youtubeMatch = body.match(youtubeUrlRegex);
+  if (youtubeMatch) {
+    const youtubeVideoUrl = youtubeMatch[1];
+    console.log(`YouTube動画URLを受信しました: ${youtubeVideoUrl}`);
+    try {
+      const apiUrl = `https://vkrdownloader.xyz/server/?api_key=vkrdownloader&vkr=${encodeURIComponent(youtubeVideoUrl)}`;
+      const response = await axios.get(apiUrl);
+      const videoData = response.data.data;
+
+      if (videoData && videoData.downloads && videoData.downloads.length > 0) {
+        const title = videoData.title;
+        const thumbnail = videoData.thumbnail;
+        const downloadUrl = videoData.downloads[0].url;
+
+        // 最初のメッセージを送信
+        const infoMessage = `[info][title]${title}[/title][code]${downloadUrl}[/code][/info]`;
+        await sendReplyMessage(roomId, infoMessage, { accountId, messageId });
+
+        // サムネイルをダウンロードして送信
+        await downloadAndUploadImage(thumbnail, roomId);
+
+        console.log("YouTube動画情報送信成功");
+        return res.sendStatus(200);
+      } else {
+        await sendReplyMessage(roomId, `動画情報の取得に失敗しました。`, { accountId, messageId });
+        return res.sendStatus(200);
+      }
+
+    } catch (error) {
+      console.error("YouTube処理でエラー:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, `エラーが発生しました。再度お試しください。`, { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
+  
   // 「おみくじ」に反応する（メッセージへの返信）
   if (body === 'おみくじ') {
     console.log(`「おみくじ」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
@@ -138,6 +175,44 @@ app.post('/webhook', async (req, res) => {
 });
 
 // --- 新しい機能 ---
+
+
+
+/**
+ * 画像をダウンロードし、Chatworkにアップロードして、ローカルから削除します。
+ * @param {string} imageUrl 画像のURL
+ * @param {string} roomId ルームID
+ */
+async function downloadAndUploadImage(imageUrl, roomId) {
+  const filePath = path.join('/tmp', `thumbnail_${Date.now()}.jpg`);
+  try {
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    await fsp.writeFile(filePath, response.data);
+    console.log("サムネイル画像ダウンロード成功:", filePath);
+
+    const formData = new FormData();
+    formData.append('file', fs.createReadStream(filePath));
+
+    const chatworkResponse = await axios.post(
+      `https://api.chatwork.com/v2/rooms/${roomId}/files`,
+      formData,
+      {
+        headers: { ...formData.getHeaders(), 'X-ChatWorkToken': CHATWORK_API_TOKEN },
+      }
+    );
+    console.log("サムネイル画像アップロード成功:", chatworkResponse.data);
+  } catch (error) {
+    console.error("画像ダウンロードまたはアップロードエラー:", error.response?.data || error.message);
+    throw error;
+  } finally {
+    try {
+      await fsp.unlink(filePath);
+      console.log("一時ファイルを削除しました:", filePath);
+    } catch (err) {
+      console.error("一時ファイルの削除に失敗しました:", err);
+    }
+  }
+}
 
 /**
  * おみくじの結果をランダムに取得します。
