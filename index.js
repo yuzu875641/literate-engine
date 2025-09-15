@@ -3,7 +3,7 @@ const axios = require('axios');
 const fs = require('fs'); // 通常のfsモジュール
 const fsp = require('fs').promises; // fs.promisesモジュール
 const path = require('path');
-const qrcode = require('qrcode');
+const qrcode = require('qrcode'); // QRを生成
 const FormData = require('form-data');
 const app = express();
 app.use(express.json());
