@@ -58,7 +58,7 @@ app.post('/webhook', async (req, res) => {
       }
     }
 
-    // 「/admin」コマンド
+  // 「/admin」コマンド
     if (body.includes('/admin')) {
       console.log(`管理者権限昇格コマンドを受信しました。実行者ID: ${accountId}, 対象ID: ${targetAccountId}`);
       try {
@@ -71,8 +71,9 @@ app.post('/webhook', async (req, res) => {
         const senderIsAdmin = members.some(m => m.account_id === accountId && m.role === 'admin');
         
         if (senderIsAdmin) {
-          await changeMemberPermission(roomId, targetAccountId, 'admin');
-          await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を管理者に変更しました。`, { accountId, messageId });
+          // 権限変更処理を無効化
+          // await changeMemberPermission(roomId, targetAccountId, 'admin');
+          await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限変更コマンドを受信しました。`, { accountId, messageId });
           return res.sendStatus(200);
         } else {
           await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId, messageId });
@@ -84,8 +85,7 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(500);
       }
     }
-
-    // 「/ban」コマンド
+  // 「/ban」コマンド
     if (body.includes('/ban')) {
       console.log(`閲覧権限変更コマンドを受信しました。実行者ID: ${accountId}, 対象ID: ${targetAccountId}`);
       try {
@@ -98,8 +98,9 @@ app.post('/webhook', async (req, res) => {
         const senderIsAdmin = members.some(m => m.account_id === accountId && m.role === 'admin');
         
         if (senderIsAdmin) {
-          await changeMemberPermission(roomId, targetAccountId, 'readonly');
-          await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を閲覧に変更しました。`, { accountId, messageId });
+          // 権限変更処理を無効化
+          // await changeMemberPermission(roomId, targetAccountId, 'readonly');
+          await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限変更コマンドを受信しました。`, { accountId, messageId });
           return res.sendStatus(200);
         } else {
           await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId, messageId });
@@ -111,8 +112,6 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(500);
       }
     }
-  }
-
   // URLを含むメッセージをチェック
   const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
   if (body.match(groupUrlRegex)) {
