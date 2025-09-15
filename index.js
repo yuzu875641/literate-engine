@@ -48,7 +48,6 @@ app.post('/webhook', async (req, res) => {
       console.log(`メッセージID ${targetMessageId} の削除コマンドを受信しました。`);
       try {
         await deleteMessage(targetRoomId, targetMessageId);
-        await sendReplyMessage(roomId, 'メッセージを削除しました。', { accountId, messageId });
         return res.sendStatus(200);
       } catch (error) {
         console.error("メッセージ削除でエラー:", error.response?.data || error.message);
