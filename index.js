@@ -19,6 +19,9 @@ const EMOJI_LIST = [
   '(handshake)', '(y)'
 ];
 
+// 特定のURLに対する警告回数を記憶するオブジェクト（一時的なもの）
+const userWarningCount = {};
+
 // ウェブフックのエンドポイント
 app.post('/webhook', async (req, res) => {
   const webhookEvent = req.body.webhook_event;
@@ -28,6 +31,35 @@ app.post('/webhook', async (req, res) => {
   }
 
   const { account_id: accountId, body, room_id: roomId, message_id: messageId } = webhookEvent;
+
+  // URLを含むメッセージをチェック
+  const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
+  if (body.match(groupUrlRegex)) {
+    if (userWarningCount[accountId] >= 1) {
+      // 2回目以降の投稿の場合、権限を閲覧に変更
+      console.log(`アカウントID ${accountId} が規約違反URLを2回以上投稿しました。権限を閲覧に変更します。`);
+      try {
+        await changeMemberPermission(roomId, accountId, 'readonly');
+        delete userWarningCount[accountId]; // カウントをリセット
+        return res.sendStatus(200);
+      } catch (error) {
+        console.error("URL違反による権限変更でエラー:", error);
+        return res.sendStatus(500);
+      }
+    } else {
+      // 1回目の投稿の場合、警告メッセージを返信
+      console.log(`アカウントID ${accountId} が規約違反URLを投稿しました。警告します。`);
+      const warningMessage = `このURLの投稿は許可されていません。再度投稿された場合、権限が変更されます。`;
+      try {
+        await sendReplyMessage(roomId, warningMessage, { accountId, messageId });
+        userWarningCount[accountId] = 1;
+        return res.sendStatus(200);
+      } catch (error) {
+        console.error("URL違反警告でエラー:", error);
+        return res.sendStatus(500);
+      }
+    }
+  }
 
   // 「おみくじ」に反応する（メッセージへの返信）
   if (body === 'おみくじ') {
@@ -141,7 +173,7 @@ async function sendReplyMessage(roomId, message, replyData) {
   }
 }
 
-// --- 既存の機能（変更なし） ---
+// --- 既存の機能 ---
 
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
