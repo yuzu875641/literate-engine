@@ -93,13 +93,20 @@ app.post('/webhook', async (req, res) => {
 
 // --- 新しい機能 ---
 
+// Add this helper function
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * メッセージ内の特定の絵文字の数をカウントします。
  */
 function countEmojis(text, emojiList) {
   let count = 0;
   for (const emoji of emojiList) {
-    const regex = new RegExp(emoji, 'g');
+    // Escape the emoji string before creating the regex
+    const escapedEmoji = escapeRegExp(emoji);
+    const regex = new RegExp(escapedEmoji, 'g');
     const matches = text.match(regex);
     if (matches) {
       count += matches.length;
