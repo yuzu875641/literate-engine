@@ -62,42 +62,74 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
-  // 管理者権限昇格コマンドに反応
-  if (webhookEvent.reply_to && body.includes('/admin')) {
-    const targetAccountId = webhookEvent.reply_to.account_id;
+  // 管理者権限昇格・閲覧権限変更コマンドに反応
+  const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;
+  const replyMatch = body.match(replyRegex);
+  
+  if (replyMatch) {
+    const targetAccountId = replyMatch[1];
+    const targetRoomId = replyMatch[2];
+    const targetMessageId = replyMatch[3];
     const senderAccountId = accountId;
-    console.log(`管理者権限昇格コマンドを受信しました。実行者ID: ${senderAccountId}, 対象ID: ${targetAccountId}`);
-    try {
-      const response = await axios.get(
-        `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
-          headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
+
+    if (body.includes('/admin')) {
+        console.log(`管理者権限昇格コマンドを受信しました。実行者ID: ${senderAccountId}, 対象ID: ${targetAccountId}`);
+        try {
+            const response = await axios.get(
+                `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
+                    headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
+                }
+            );
+            const members = response.data;
+            const senderIsAdmin = members.some(m => m.account_id === senderAccountId && m.role === 'admin');
+
+            if (senderIsAdmin) {
+                await changeMemberPermission(roomId, targetAccountId, 'admin');
+                await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を管理者に変更しました。`, { accountId: senderAccountId, messageId });
+                return res.sendStatus(200);
+            } else {
+                await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId: senderAccountId, messageId });
+                return res.sendStatus(200);
+            }
+        } catch (error) {
+            console.error("管理者権限昇格処理でエラーが発生:", error.response?.data || error.message);
+            await sendReplyMessage(roomId, `エラーが発生しました。`, { accountId, messageId });
+            return res.sendStatus(500);
         }
-      );
-      const members = response.data;
-      const senderIsAdmin = members.some(m => m.account_id === senderAccountId && m.role === 'admin');
-      
-      if (senderIsAdmin) {
-        // 実行者が管理者権限を持っている場合
-        await changeMemberPermission(roomId, targetAccountId, 'admin');
-        await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を管理者に変更しました。`, { accountId: senderAccountId, messageId });
-        return res.sendStatus(200);
-      } else {
-        // 実行者が管理者権限を持っていない場合
-        const errorMessage = '権限が足りません。管理者のみがこのコマンドを実行できます。';
-        await sendReplyMessage(roomId, errorMessage, { accountId: senderAccountId, messageId });
-        return res.sendStatus(200);
-      }
-    } catch (error) {
-      console.error("管理者権限昇格処理でエラーが発生:", error.response?.data || error.message);
-      await sendReplyMessage(roomId, `エラーが発生しました。`, { accountId, messageId });
-      return res.sendStatus(500);
+    } else if (body.includes('/ban')) {
+        console.log(`閲覧権限変更コマンドを受信しました。実行者ID: ${senderAccountId}, 対象ID: ${targetAccountId}`);
+        try {
+            const response = await axios.get(
+                `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
+                    headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
+                }
+            );
+            const members = response.data;
+            const senderIsAdmin = members.some(m => m.account_id === senderAccountId && m.role === 'admin');
+
+            if (senderIsAdmin) {
+                await changeMemberPermission(roomId, targetAccountId, 'readonly');
+                await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を閲覧に変更しました。`, { accountId: senderAccountId, messageId });
+                return res.sendStatus(200);
+            } else {
+                await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId: senderAccountId, messageId });
+                return res.sendStatus(200);
+            }
+        } catch (error) {
+            console.error("閲覧権限変更処理でエラーが発生:", error.response?.data || error.message);
+            await sendReplyMessage(roomId, `エラーが発生しました。`, { accountId, messageId });
+            return res.sendStatus(500);
+        }
     }
   }
   // 「削除」コマンドに反応してメッセージを削除
-  // 返信メッセージであり、かつ本文に「削除」という単語が含まれている場合
-  if (webhookEvent.reply_to && body.includes('削除')) {
-    const targetRoomId = webhookEvent.reply_to.room_id;
-    const targetMessageId = webhookEvent.reply_to.message_id;
+  const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;
+  const replyMatch = body.match(replyRegex);
+
+  if (replyMatch && body.includes('削除')) {
+    const targetAccountId = replyMatch[1];
+    const targetRoomId = replyMatch[2];
+    const targetMessageId = replyMatch[3];
     console.log(`メッセージID ${targetMessageId} の削除コマンドを受信しました。`);
     try {
       await deleteMessage(targetRoomId, targetMessageId);
@@ -110,7 +142,6 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
-
   // QRコード生成コマンドに反応
   if (body.startsWith('/QR ')) {
     const textToEncode = body.substring(4); // "/QR "の4文字を除去
