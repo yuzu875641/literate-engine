@@ -3,6 +3,7 @@ const axios = require('axios');
 const fs = require('fs'); // 通常のfsモジュール
 const fsp = require('fs').promises; // fs.promisesモジュール
 const path = require('path');
+const qrcode = require('qrcode');
 const FormData = require('form-data');
 const app = express();
 app.use(express.json());
@@ -75,6 +76,26 @@ app.post('/webhook', async (req, res) => {
       console.error("メッセージ削除でエラー:", error.response?.data || error.message);
       const errorMessage = 'メッセージの削除に失敗しました。ボットは自分自身の投稿しか削除できません。';
       await sendReplyMessage(roomId, errorMessage, { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
+
+  // QRコード生成コマンドに反応
+  if (body.startsWith('/QR ')) {
+    const textToEncode = body.substring(4); // "/QR "の4文字を除去
+    if (textToEncode.trim() === '') {
+        await sendReplyMessage(roomId, 'QRコードにしたいURLまたはテキストを指定してください。', { accountId, messageId });
+        return res.sendStatus(200);
+    }
+    console.log(`QRコード生成コマンドを受信しました。対象テキスト: ${textToEncode}`);
+    try {
+      const filePath = await generateQRCodeImage(textToEncode);
+      const fileId = await uploadImageToChatwork(filePath, roomId);
+      await sendFileReply(fileId, { accountId, roomId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("QRコード生成処理でエラーが発生:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, 'QRコードの生成に失敗しました。', { accountId, messageId });
       return res.sendStatus(500);
     }
   }
@@ -194,7 +215,17 @@ app.post('/webhook', async (req, res) => {
 
 // --- 新しい機能 ---
 
-
+async function generateQRCodeImage(text) {
+  const filePath = path.join('/tmp', `qrcode_${Date.now()}.png`);
+  try {
+    await qrcode.toFile(filePath, text);
+    console.log("QRコード生成成功:", filePath);
+    return filePath;
+  } catch (error) {
+    console.error("QRコード生成エラー:", error);
+    throw error;
+  }
+}
 
 /**
  * 指定されたメッセージを削除します。
@@ -288,6 +319,7 @@ async function sendReplyMessage(roomId, message, replyData) {
 
 // --- 既存の機能 ---
 
+
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -379,6 +411,27 @@ async function uploadImageToChatwork(filePath, roomId) {
     }
   }
 }
+async function sendFileReply(fileId, replyData) {
+  const { accountId, roomId, messageId } = replyData;
+  try {
+    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\nQRコードだよ！\n[file:${fileId}]`;
+    await axios.post(
+      `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
+      new URLSearchParams({ body: message }),
+      {
+        headers: {
+          "X-ChatWorkToken": CHATWORK_API_TOKEN,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+    console.log("ファイル添付メッセージ送信成功");
+  } catch (error) {
+    console.error("メッセージ送信エラー:", error.response?.data || error.message);
+    throw error;
+  }
+}
+
 
 async function sendFileReply(fileId, replyData) {
   const { accountId, roomId, messageId } = replyData;
