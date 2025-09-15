@@ -112,6 +112,7 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(500);
       }
     }
+  }
   // URLを含むメッセージをチェック
   const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
   if (body.match(groupUrlRegex)) {
