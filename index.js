@@ -245,6 +245,18 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
+  // Zalgoテキストが含まれていたら権限を閲覧に変更
+  const zalgoPattern = /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/;
+  if (zalgoPattern.test(body)) {
+    console.log(`Zalgoテキストが含まれています。ユーザーの権限を閲覧に変更します。`);
+    try {
+      await changeMemberPermission(roomId, accountId, 'readonly');
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("Zalgoテキスト処理でエラー:", error);
+      return res.sendStatus(500);
+    }
+  }
 
   // 絵文字が15個以上含まれていたら権限を閲覧に変更
   const emojiCount = countEmojis(body, EMOJI_LIST);
