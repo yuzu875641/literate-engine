@@ -62,20 +62,23 @@ app.post('/webhook', async (req, res) => {
   }
 
   // 「削除」コマンドに反応してメッセージを削除
-  // 返信メッセージであり、かつ本文が「削除」の場合
-  if (webhookEvent.reply_to && body === '削除') {
+  // 返信メッセージであり、かつ本文に「削除」という単語が含まれている場合
+  if (webhookEvent.reply_to && body.includes('削除')) {
     const targetRoomId = webhookEvent.reply_to.room_id;
     const targetMessageId = webhookEvent.reply_to.message_id;
     console.log(`メッセージID ${targetMessageId} の削除コマンドを受信しました。`);
     try {
       await deleteMessage(targetRoomId, targetMessageId);
+      await sendReplyMessage(roomId, 'メッセージを削除しました。', { accountId, messageId });
       return res.sendStatus(200);
     } catch (error) {
       console.error("メッセージ削除でエラー:", error.response?.data || error.message);
+      const errorMessage = 'メッセージの削除に失敗しました。ボットは自分自身の投稿しか削除できません。';
+      await sendReplyMessage(roomId, errorMessage, { accountId, messageId });
       return res.sendStatus(500);
     }
   }
-
+  
   // YouTubeの動画URLに反応する
   // 新しい正規表現はyoutu.beとyoutube.comの両方に対応します
   const youtubeUrlRegex = /\/youtube\/(https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/watch\?v=)[a-zA-Z0-9_-]+)(?:\?.+)?/;
