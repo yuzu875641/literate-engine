@@ -62,7 +62,8 @@ app.post('/webhook', async (req, res) => {
   }
 
   // YouTubeの動画URLに反応する
-  const youtubeUrlRegex = /\/youtube\/(https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/watch\?v=)[a-zA-Z0-9_-]+)/;
+  // 新しい正規表現はyoutu.beとyoutube.comの両方に対応します
+  const youtubeUrlRegex = /\/youtube\/(https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/watch\?v=)[a-zA-Z0-9_-]+)(?:\?.+)?/;
   const youtubeMatch = body.match(youtubeUrlRegex);
   if (youtubeMatch) {
     const youtubeVideoUrl = youtubeMatch[1];
@@ -97,7 +98,6 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
-  
   // 「おみくじ」に反応する（メッセージへの返信）
   if (body === 'おみくじ') {
     console.log(`「おみくじ」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
