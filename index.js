@@ -3,7 +3,7 @@ const axios = require('axios');
 const fs = require('fs'); // 通常のfsモジュール
 const fsp = require('fs').promises; // fs.promisesモジュール
 const path = require('path');
-const qrcode = require('qrcode'); // QRを生成
+const qrcode = require('qrcode');
 const FormData = require('form-data');
 const app = express();
 app.use(express.json());
@@ -58,8 +58,7 @@ app.post('/webhook', async (req, res) => {
       }
     }
 
-
-// 「/admin」コマンド
+    // 「/admin」コマンド
     if (body.includes('/admin')) {
       console.log(`管理者権限昇格コマンドを受信しました。実行者ID: ${accountId}, 対象ID: ${targetAccountId}`);
       try {
@@ -113,7 +112,9 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(500);
       }
     }
-　// URLを含むメッセージをチェック
+  } // <-- ここに閉じ波括弧を追加
+
+  // URLを含むメッセージをチェック
   const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
   if (body.match(groupUrlRegex)) {
     if (userWarningCount[accountId] >= 1) {
