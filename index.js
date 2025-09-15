@@ -61,6 +61,21 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
+  // 「削除」コマンドに反応してメッセージを削除
+  // 返信メッセージであり、かつ本文が「削除」の場合
+  if (webhookEvent.reply_to && body === '削除') {
+    const targetRoomId = webhookEvent.reply_to.room_id;
+    const targetMessageId = webhookEvent.reply_to.message_id;
+    console.log(`メッセージID ${targetMessageId} の削除コマンドを受信しました。`);
+    try {
+      await deleteMessage(targetRoomId, targetMessageId);
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("メッセージ削除でエラー:", error.response?.data || error.message);
+      return res.sendStatus(500);
+    }
+  }
+
   // YouTubeの動画URLに反応する
   // 新しい正規表現はyoutu.beとyoutube.comの両方に対応します
   const youtubeUrlRegex = /\/youtube\/(https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/watch\?v=)[a-zA-Z0-9_-]+)(?:\?.+)?/;
@@ -177,6 +192,26 @@ app.post('/webhook', async (req, res) => {
 // --- 新しい機能 ---
 
 
+
+/**
+ * 指定されたメッセージを削除します。
+ * @param {string} roomId 削除対象のメッセージがあるルームID
+ * @param {string} messageId 削除するメッセージのID
+ */
+async function deleteMessage(roomId, messageId) {
+  try {
+    await axios.delete(
+      `https://api.chatwork.com/v2/rooms/${roomId}/messages/${messageId}`,
+      {
+        headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
+      }
+    );
+    console.log(`メッセージID ${messageId} を削除しました。`);
+  } catch (error) {
+    console.error("メッセージ削除APIエラー:", error.response?.data || error.message);
+    throw error;
+  }
+}
 
 /**
  * 画像をダウンロードし、Chatworkにアップロードして、ローカルから削除します。
