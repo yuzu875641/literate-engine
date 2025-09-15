@@ -3,13 +3,13 @@ const axios = require('axios');
 const fs = require('fs'); // 通常のfsモジュール
 const fsp = require('fs').promises; // fs.promisesモジュール
 const path = require('path');
-const qrcode = require('qrcode');
+const qrcode = require('qrcode');　// QRコードを簡単に生成！
 const FormData = require('form-data');
 const app = express();
 app.use(express.json());
 
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
-const ADMIN_ACCOUNT_ID = 10617115; // 管理者として無視するアカウントID
+const ADMIN_ACCOUNT_ID = 10617115; //　自分自身を無視するようにしたいけどIDの取得だるいから直接入れ込みます
 
 const EMOJI_LIST = [
   ':)', ':(', ':D', '8-)', ':o', ';)', ':(', '(sweat)', ':|', ':*', ':p', '(blush)',
@@ -34,7 +34,7 @@ app.post('/webhook', async (req, res) => {
   const { account_id: accountId, body, room_id: roomId, message_id: messageId } = webhookEvent;
 
   // 返信メッセージの形式を解析する正規表現を一度だけ宣言
-  const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;
+  const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;　// 返信
   const replyMatch = body.match(replyRegex);
 
   // 返信ベースのコマンドを処理
@@ -59,6 +59,7 @@ app.post('/webhook', async (req, res) => {
     }
 
     // 「/admin」コマンド
+    // 権限変更難しすぎる/adminだけできん
     if (body.includes('/admin')) {
       console.log(`管理者権限昇格コマンドを受信しました。実行者ID: ${accountId}, 対象ID: ${targetAccountId}`);
       try {
@@ -112,7 +113,7 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(500);
       }
     }
-  } // <-- ここに閉じ波括弧を追加
+  } 
 
   // URLを含むメッセージをチェック
   const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
