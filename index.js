@@ -34,7 +34,7 @@ app.post('/webhook', async (req, res) => {
     console.log(`「おみくじ」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
     try {
       const result = drawFortune();
-      const message = `今日の運勢は「${result}」です！`;
+      const message = `${result}`;
       await sendReplyMessage(roomId, message, { accountId, messageId });
       return res.sendStatus(200);
     } catch (error) {
@@ -123,7 +123,7 @@ function drawFortune() {
 async function sendReplyMessage(roomId, message, replyData) {
   const { accountId, messageId } = replyData;
   try {
-    const formattedMessage = `[rp aid=${accountId} to=${roomId}-${messageId}]${message}`;
+    const formattedMessage = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n${message}`;
     await axios.post(
       `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
       new URLSearchParams({ body: formattedMessage }),
@@ -238,7 +238,7 @@ async function uploadImageToChatwork(filePath, roomId) {
 async function sendFileReply(fileId, replyData) {
   const { accountId, roomId, messageId } = replyData;
   try {
-    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像です！\n[file:${fileId}]`;
+    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像だよ！`;
     await axios.post(
       `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
       new URLSearchParams({ body: message }),
