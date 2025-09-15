@@ -215,7 +215,7 @@ async function uploadImageToChatwork(filePath, roomId) {
 async function sendFileReply(fileId, replyData) {
   const { accountId, roomId, messageId } = replyData;
   try {
-    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像です！\n[file:${fileId}]`;
+    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像だよ！`;
     await axios.post(
       `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
       new URLSearchParams({ body: message }),
