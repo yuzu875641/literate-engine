@@ -29,6 +29,20 @@ app.post('/webhook', async (req, res) => {
 
   const { account_id: accountId, body, room_id: roomId, message_id: messageId } = webhookEvent;
 
+  // 「おみくじ」に反応する（メッセージへの返信）
+  if (body === 'おみくじ') {
+    console.log(`「おみくじ」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
+    try {
+      const result = drawFortune();
+      const message = `今日の運勢は「${result}」です！`;
+      await sendReplyMessage(roomId, message, { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("おみくじ処理でエラーが発生:", error);
+      return res.sendStatus(500);
+    }
+  }
+
   // 特定のアカウントID(9510804)からの「復活」メッセージに反応する
   if (accountId === 9510804 && body.includes('復活')) {
     console.log(`アカウントID ${accountId} から「復活」メッセージを受信しました。権限を管理者に変更します。`);
@@ -93,18 +107,49 @@ app.post('/webhook', async (req, res) => {
 
 // --- 新しい機能 ---
 
-// Add this helper function
+/**
+ * おみくじの結果をランダムに取得します。
+ * @returns {string} おみくじの結果
+ */
+function drawFortune() {
+  const fortunes = ['大吉', '吉', '中吉', '小吉', '末吉', '凶', '大凶'];
+  const randomIndex = Math.floor(Math.random() * fortunes.length);
+  return fortunes[randomIndex];
+}
+
+/**
+ * 誰かに返信メッセージを送信します。
+ */
+async function sendReplyMessage(roomId, message, replyData) {
+  const { accountId, messageId } = replyData;
+  try {
+    const formattedMessage = `[rp aid=${accountId} to=${roomId}-${messageId}]${message}`;
+    await axios.post(
+      `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
+      new URLSearchParams({ body: formattedMessage }),
+      {
+        headers: {
+          "X-ChatWorkToken": CHATWORK_API_TOKEN,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+    console.log("返信メッセージ送信成功");
+  } catch (error) {
+    console.error("返信メッセージ送信エラー:", error.response?.data || error.message);
+    throw error;
+  }
+}
+
+// --- 既存の機能（変更なし） ---
+
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * メッセージ内の特定の絵文字の数をカウントします。
- */
 function countEmojis(text, emojiList) {
   let count = 0;
   for (const emoji of emojiList) {
-    // Escape the emoji string before creating the regex
     const escapedEmoji = escapeRegExp(emoji);
     const regex = new RegExp(escapedEmoji, 'g');
     const matches = text.match(regex);
@@ -115,30 +160,20 @@ function countEmojis(text, emojiList) {
   return count;
 }
 
-/**
- * メンバーの権限を、送信者のみを閲覧に変更します。
- */
 async function changeMemberPermission(roomId, accountId, newRole) {
   try {
-    // 1. 現在のメンバーリストを取得
     const response = await axios.get(
       `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
         headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
       }
     );
     const members = response.data;
-
-    // 2. 権限ごとにメンバーを振り分け
     const adminIds = members.filter(m => m.role === 'admin' && m.account_id !== accountId).map(m => m.account_id);
     const memberIds = members.filter(m => m.role === 'member' && m.account_id !== accountId).map(m => m.account_id);
     const readonlyIds = members.filter(m => m.role === 'readonly' && m.account_id !== accountId).map(m => m.account_id);
-
-    // 送信者を新しい権限リストに追加
     if (newRole === 'admin') adminIds.push(accountId);
     if (newRole === 'member') memberIds.push(accountId);
     if (newRole === 'readonly') readonlyIds.push(accountId);
-    
-    // 3. 更新されたメンバーリストを送信して権限を変更
     await axios.put(
       `https://api.chatwork.com/v2/rooms/${roomId}/members`,
       new URLSearchParams({
@@ -160,29 +195,20 @@ async function changeMemberPermission(roomId, accountId, newRole) {
   }
 }
 
-
-// --- 既存の機能（変更なし） ---
-
-/**
- * ランダムな画像をダウンロードし、一時ファイルとして保存します。
- */
 async function downloadRandomImage() {
   const imageUrl = 'https://pic.re/image';
   const filePath = path.join('/tmp', `image_${Date.now()}.jpg`);
   try {
-    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-    await fsp.writeFile(filePath, response.data);
-    console.log("画像ダウンロード成功:", filePath);
-    return filePath;
+      const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      await fsp.writeFile(filePath, response.data);
+      console.log("画像ダウンロード成功:", filePath);
+      return filePath;
   } catch (error) {
     console.error("画像ダウンロードエラー:", error);
     throw error;
   }
 }
 
-/**
- * 一時ファイルをChatworkにアップロードし、ファイルを削除します。
- */
 async function uploadImageToChatwork(filePath, roomId) {
   try {
     const formData = new FormData();
@@ -209,13 +235,10 @@ async function uploadImageToChatwork(filePath, roomId) {
   }
 }
 
-/**
- * ファイルIDを含んだ返信メッセージを送信します。
- */
 async function sendFileReply(fileId, replyData) {
   const { accountId, roomId, messageId } = replyData;
   try {
-    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像だよ！`;
+    const message = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n画像です！\n[file:${fileId}]`;
     await axios.post(
       `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
       new URLSearchParams({ body: message }),
