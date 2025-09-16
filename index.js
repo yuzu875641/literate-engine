@@ -435,6 +435,7 @@ async function downloadCountImage() {
   }
 }
 
+
 /**
  * おみくじの結果をランダムに取得します。
  * @returns {string} おみくじの結果
