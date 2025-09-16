@@ -33,6 +33,23 @@ app.post('/webhook', async (req, res) => {
 
   const { account_id: accountId, body, room_id: roomId, message_id: messageId } = webhookEvent;
 
+  try {
+    const response = await axios.get(
+      `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
+        headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
+      }
+    );
+    const members = response.data;
+    const sender = members.find(m => m.account_id === accountId);
+    if (sender && sender.role === 'admin') {
+      console.log(`管理者からのメッセージを受信しました。処理をスキップします。`);
+      return res.sendStatus(200);
+    }
+  } catch (error) {
+    console.error("メンバーリスト取得エラー:", error.response?.data || error.message);
+    // エラーが発生しても、以降の処理は続行
+  }
+  
   // 返信メッセージの形式を解析する正規表現を一度だけ宣言
   const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;　// 返信
   const replyMatch = body.match(replyRegex);
