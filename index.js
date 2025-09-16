@@ -33,6 +33,7 @@ app.post('/webhook', async (req, res) => {
 
   const { account_id: accountId, body, room_id: roomId, message_id: messageId } = webhookEvent;
 
+  let senderIsAdmin = false;
   try {
     const response = await axios.get(
       `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
@@ -42,13 +43,12 @@ app.post('/webhook', async (req, res) => {
     const members = response.data;
     const sender = members.find(m => m.account_id === accountId);
     if (sender && sender.role === 'admin') {
-      console.log(`管理者からのメッセージを受信しました。処理をスキップします。`);
-      return res.sendStatus(200);
+      senderIsAdmin = true;
     }
   } catch (error) {
     console.error("メンバーリスト取得エラー:", error.response?.data || error.message);
-    // エラーが発生しても、以降の処理は続行
   }
+
   
   // 返信メッセージの形式を解析する正規表現を一度だけ宣言
   const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;　// 返信
@@ -383,9 +383,8 @@ app.post('/webhook', async (req, res) => {
     console.log(`管理者からのメッセージを受信しました: ${accountId}`);
     return res.sendStatus(200);
   }
-
-  // [toall]が含まれていたら権限を閲覧に変更
-  if (body.includes('[toall]')) {
+  
+if (body.includes('[toall]') && !senderIsAdmin) {
     console.log(`[toall]が含まれています。ユーザーの権限を閲覧に変更します。`);
     try {
       await changeMemberPermission(roomId, accountId, 'readonly');
@@ -394,7 +393,7 @@ app.post('/webhook', async (req, res) => {
       console.error("[toall]処理でエラー:", error);
       return res.sendStatus(500);
     }
-  }
+}
   // Zalgoテキストが含まれていたら権限を閲覧に変更
   const zalgoPattern = /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/;
   if (zalgoPattern.test(body)) {
@@ -421,7 +420,7 @@ app.post('/webhook', async (req, res) => {
   
   // 絵文字が15個以上含まれていたら権限を閲覧に変更
   const emojiCount = countEmojis(body, EMOJI_LIST);
-  if (emojiCount >= 15) {
+  if (emojiCount >= 15 && !senderIsAdmin) {
     console.log(`絵文字が15個以上含まれています (${emojiCount}個)。ユーザーの権限を閲覧に変更します。`);
     try {
       await changeMemberPermission(roomId, accountId, 'readonly');
@@ -431,7 +430,6 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
-
   // 「画像送ってみて」という投稿に反応する
   if (body === '画像送ってみて') {
     console.log(`「画像送ってみて」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
