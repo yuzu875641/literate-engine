@@ -479,7 +479,7 @@ async function downloadAndUploadImage(imageUrl, roomId) {
 }
 
 async function downloadCountImage() {
-  const imageUrl = 'https://count.getloli.com/@yuyuyuzu?name=yuyuyuzu&theme=gelbooru&padding=5&offset=0&align=top&scale=1&pixelated=0&darkmode=auto';
+  const imageUrl = 'https://ag-sage.vercel.app/';
   const filePath = path.join('/tmp', `count_image_${Date.now()}.png`);
   try {
     const response = await axios.get(imageUrl, {
