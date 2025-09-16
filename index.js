@@ -125,6 +125,7 @@ app.post('/webhook', async (req, res) => {
 
   // 管理者のみ使用可能なコマンドを処理
   // /onlyreads コマンドの処理
+  // /onlyreads コマンドの処理
   if (body.trim().startsWith('/onlyreads')) {
     console.log(`「/onlyreads」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
     if (!senderIsAdmin) {
@@ -137,11 +138,15 @@ app.post('/webhook', async (req, res) => {
       const admins = members.filter(m => m.role === 'admin');
       const regularMembers = members.filter(m => m.role === 'member');
       const readonlyMembers = members.filter(m => m.role === 'readonly');
-
+      
       member_backup[roomId] = [...regularMembers, ...readonlyMembers];
-
+      
       const newAdminIds = admins.map(m => m.account_id);
-      const newReadonlyIds = members.map(m => m.account_id);
+      
+      // 閲覧のみにするユーザーのIDリストを生成（管理者を除外）
+      const newReadonlyIds = members
+        .filter(m => m.role !== 'admin') // <-- この行を追加
+        .map(m => m.account_id);
 
       await axios.put(
         `https://api.chatwork.com/v2/rooms/${roomId}/members`,
@@ -165,7 +170,6 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
-
   // /release コマンドの処理
   if (body.trim().startsWith('/release')) {
     console.log(`「/release」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
