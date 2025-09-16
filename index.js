@@ -22,7 +22,9 @@ const EMOJI_LIST = [
 
 // 特定のURLに対する警告回数を記憶するオブジェクト（一時的なもの）
 const userWarningCount = {};
+// メンバーの権限を部屋別にバックアップするオブジェクト
 const member_backup = {};
+
 // ウェブフックのエンドポイント
 app.post('/webhook', async (req, res) => {
   const webhookEvent = req.body.webhook_event;
@@ -33,6 +35,78 @@ app.post('/webhook', async (req, res) => {
 
   const { account_id: accountId, body, room_id: roomId, message_id: messageId } = webhookEvent;
 
+  // 返信メッセージの形式を解析する正規表現を一度だけ宣言
+  const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;　// 返信
+  const replyMatch = body.match(replyRegex);
+
+  // 権限チェックの必要がないコマンドを先に処理
+  // QRコード生成コマンドに反応
+  if (body.startsWith('/QR ')) {
+    const textToEncode = body.substring(4); // "/QR "の4文字を除去
+    if (textToEncode.trim() === '') {
+      await sendReplyMessage(roomId, 'QRコードにしたいURLまたはテキストを指定してください。', { accountId, messageId });
+      return res.sendStatus(200);
+    }
+    console.log(`QRコード生成コマンドを受信しました。対象テキスト: ${textToEncode}`);
+    try {
+      const filePath = await generateQRCodeImage(textToEncode);
+      await uploadImageToChatwork(filePath, roomId);
+      const qrMessage = `QRコードだよ！`;
+      await sendReplyMessage(roomId, qrMessage, { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("QRコード生成処理でエラーが発生:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, 'QRコードの生成に失敗しました。', { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
+
+  // /countコマンドに反応
+  if (body.includes('/count')) {
+    console.log(`「/count」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
+    try {
+      const filePath = await downloadCountImage();
+      await uploadImageToChatwork(filePath, roomId);
+      const countMessage = `君は何番目かな？`;
+      await sendReplyMessage(roomId, countMessage, { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("画像送信処理でエラーが発生:", error);
+      await sendReplyMessage(roomId, '画像の送信に失敗しました。', { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
+
+  // 「おみくじ」に反応する
+  if (body === 'おみくじ') {
+    console.log(`「おみくじ」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
+    try {
+      const result = drawFortune();
+      const message = `${result}`;
+      await sendReplyMessage(roomId, message, { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("おみくじ処理でエラーが発生:", error);
+      return res.sendStatus(500);
+    }
+  }
+
+  // 「画像送ってみて」という投稿に反応する
+  if (body === '画像送ってみて') {
+    console.log(`「画像送ってみて」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
+    try {
+      const filePath = await downloadRandomImage();
+      await uploadImageToChatwork(filePath, roomId);
+      const imageMessage = `画像だよ！`;
+      await sendReplyMessage(roomId, imageMessage, { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("画像送信処理でエラーが発生:", error);
+      return res.sendStatus(500);
+    }
+  }
+
+  // メンバーリストを取得し、送信者が管理者であるかをチェック
   let senderIsAdmin = false;
   try {
     const response = await axios.get(
@@ -49,66 +123,31 @@ app.post('/webhook', async (req, res) => {
     console.error("メンバーリスト取得エラー:", error.response?.data || error.message);
   }
 
-  
-  // 返信メッセージの形式を解析する正規表現を一度だけ宣言
-  const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;　// 返信
-  const replyMatch = body.match(replyRegex);
-
-  // 返信ベースのコマンドを処理
-  if (replyMatch) {
-    const targetAccountId = replyMatch[1];
-    const targetRoomId = replyMatch[2];
-    const targetMessageId = replyMatch[3];
-
-    // 「削除」コマンド
-    if (body.includes('削除')) {
-      console.log(`メッセージID ${targetMessageId} の削除コマンドを受信しました。`);
-      try {
-        await deleteMessage(targetRoomId, targetMessageId);
-        // 成功時の完了メッセージは送信しない
-        return res.sendStatus(200);
-      } catch (error) {
-        console.error("メッセージ削除でエラー:", error.response?.data || error.message);
-        const errorMessage = 'メッセージの削除に失敗しました。ボットは自分自身の投稿しか削除できません。';
-        await sendReplyMessage(roomId, errorMessage, { accountId, messageId });
-        return res.sendStatus(500);
-      }
-    }
-    
-// /onlyreads コマンドの処理
-  if (body.includes('/onlyreads')) { // <-- ここを修正
+  // 管理者のみ使用可能なコマンドを処理
+  // /onlyreads コマンドの処理
+  if (body.trim().startsWith('/onlyreads')) {
     console.log(`「/onlyreads」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
+    if (!senderIsAdmin) {
+      await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId, messageId });
+      return res.sendStatus(200);
+    }
+
     try {
-      const response = await axios.get(
-        `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
-          headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
-        }
-      );
-      const members = response.data;
-      const senderIsAdmin = members.some(m => m.account_id === accountId && m.role === 'admin');
-
-      if (!senderIsAdmin) {
-        await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId, messageId });
-        return res.sendStatus(200);
-      }
-
-      // メンバーのバックアップを作成し、権限を閲覧のみに変更
+      const members = (await axios.get(`https://api.chatwork.com/v2/rooms/${roomId}/members`, { headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN } })).data;
       const admins = members.filter(m => m.role === 'admin');
       const regularMembers = members.filter(m => m.role === 'member');
       const readonlyMembers = members.filter(m => m.role === 'readonly');
-      
-      // 既存のメンバー権限をバックアップ
+
       member_backup[roomId] = [...regularMembers, ...readonlyMembers];
 
       const newAdminIds = admins.map(m => m.account_id);
-      const newReadonlyIds = members.map(m => m.account_id); // 全員を閲覧のみにする
+      const newReadonlyIds = members.map(m => m.account_id);
 
-      // APIを叩いて権限を更新
       await axios.put(
         `https://api.chatwork.com/v2/rooms/${roomId}/members`,
         new URLSearchParams({
           members_admin_ids: newAdminIds.join(','),
-          members_member_ids: '', // 空にする
+          members_member_ids: '',
           members_readonly_ids: newReadonlyIds.join(','),
         }),
         {
@@ -120,42 +159,32 @@ app.post('/webhook', async (req, res) => {
       );
       await sendReplyMessage(roomId, '荒らし対策モードを有効にしました。メンバー全員の権限を閲覧のみに変更しました。', { accountId, messageId });
       return res.sendStatus(200);
-
     } catch (error) {
       console.error("onlyreadsコマンド処理でエラー:", error.response?.data || error.message);
       await sendReplyMessage(roomId, `エラーが発生しました。`, { accountId, messageId });
       return res.sendStatus(500);
     }
   }
-    // /release コマンドの処理
-  if (body === '/release') {
-    console.log(`「/release」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
-    try {
-      const response = await axios.get(
-        `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
-          headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
-        }
-      );
-      const members = response.data;
-      const senderIsAdmin = members.some(m => m.account_id === accountId && m.role === 'admin');
-      
-      if (!senderIsAdmin) {
-        await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId, messageId });
-        return res.sendStatus(200);
-      }
 
-      // バックアップデータが存在しない場合は処理を中止
+  // /release コマンドの処理
+  if (body.trim().startsWith('/release')) {
+    console.log(`「/release」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
+    if (!senderIsAdmin) {
+      await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId, messageId });
+      return res.sendStatus(200);
+    }
+
+    try {
       if (!member_backup[roomId]) {
         await sendReplyMessage(roomId, '復旧データが見つかりません。', { accountId, messageId });
         return res.sendStatus(200);
       }
 
-      // 現在のメンバーリストを元に権限を再構築
+      const members = (await axios.get(`https://api.chatwork.com/v2/rooms/${roomId}/members`, { headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN } })).data;
       const newAdmins = members.filter(m => m.role === 'admin');
       const newReadonlys = [];
       const newMembers = [];
 
-      // バックアップされたメンバーの権限を復元
       member_backup[roomId].forEach(member => {
         if (member.role === 'member') {
           newMembers.push(member);
@@ -164,7 +193,6 @@ app.post('/webhook', async (req, res) => {
         }
       });
 
-      // APIを叩いて権限を更新
       await axios.put(
         `https://api.chatwork.com/v2/rooms/${roomId}/members`,
         new URLSearchParams({
@@ -180,106 +208,77 @@ app.post('/webhook', async (req, res) => {
         }
       );
 
-      // 復元が完了したらバックアップデータを削除
       delete member_backup[roomId];
-
       await sendReplyMessage(roomId, '荒らし対策モードを解除しました。メンバーの権限を元に戻しました。', { accountId, messageId });
       return res.sendStatus(200);
-
     } catch (error) {
       console.error("releaseコマンド処理でエラー:", error.response?.data || error.message);
       await sendReplyMessage(roomId, `エラーが発生しました。`, { accountId, messageId });
       return res.sendStatus(500);
     }
   }
-    // 「/admin」コマンド
-    // 権限変更難しすぎる/adminだけできん
-    if (body.includes('/admin')) {
+
+
+  // その他のメッセージルールを処理
+  if (replyMatch) {
+    const targetAccountId = replyMatch[1];
+    const targetRoomId = replyMatch[2];
+    const targetMessageId = replyMatch[3];
+
+    if (body.includes('削除')) {
+      console.log(`メッセージID ${targetMessageId} の削除コマンドを受信しました。`);
+      try {
+        await deleteMessage(targetRoomId, targetMessageId);
+        return res.sendStatus(200);
+      } catch (error) {
+        console.error("メッセージ削除でエラー:", error.response?.data || error.message);
+        const errorMessage = 'メッセージの削除に失敗しました。ボットは自分自身の投稿しか削除できません。';
+        await sendReplyMessage(roomId, errorMessage, { accountId, messageId });
+        return res.sendStatus(500);
+      }
+    }
+
+    if (body.includes('/admin') && senderIsAdmin) {
       console.log(`管理者権限昇格コマンドを受信しました。実行者ID: ${accountId}, 対象ID: ${targetAccountId}`);
       try {
-        const response = await axios.get(
-          `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
-            headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
-          }
-        );
-        const members = response.data;
-        const senderIsAdmin = members.some(m => m.account_id === accountId && m.role === 'admin');
-        
-        if (senderIsAdmin) {
-          // 権限変更処理を有効化
-          await changeMemberPermission(roomId, targetAccountId, 'admin');
-          await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を管理者に変更しました。`, { accountId, messageId });
-          return res.sendStatus(200);
-        } else {
-          await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId, messageId });
-          return res.sendStatus(200);
-        }
+        await changeMemberPermission(roomId, targetAccountId, 'admin');
+        await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を管理者に変更しました。`, { accountId, messageId });
+        return res.sendStatus(200);
       } catch (error) {
         console.error("管理者権限昇格処理でエラーが発生:", error.response?.data || error.message);
         await sendReplyMessage(roomId, `エラーが発生しました。`, { accountId, messageId });
         return res.sendStatus(500);
       }
     }
-  // 「/ban」コマンド
-    if (body.includes('/ban')) {
+
+    if (body.includes('/ban') && senderIsAdmin) {
       console.log(`閲覧権限変更コマンドを受信しました。実行者ID: ${accountId}, 対象ID: ${targetAccountId}`);
       try {
-        const response = await axios.get(
-          `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
-            headers: { 'X-ChatWorkToken': CHATWORK_API_TOKEN }
-          }
-        );
-        const members = response.data;
-        const senderIsAdmin = members.some(m => m.account_id === accountId && m.role === 'admin');
-        
-        if (senderIsAdmin) {
-          // 権限変更処理を有効化
-          await changeMemberPermission(roomId, targetAccountId, 'readonly');
-          await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を閲覧に変更しました。`, { accountId, messageId });
-          return res.sendStatus(200);
-        } else {
-          await sendReplyMessage(roomId, '権限が足りません。管理者のみがこのコマンドを実行できます。', { accountId, messageId });
-          return res.sendStatus(200);
-        }
+        await changeMemberPermission(roomId, targetAccountId, 'readonly');
+        await sendReplyMessage(roomId, `アカウントID ${targetAccountId} の権限を閲覧に変更しました。`, { accountId, messageId });
+        return res.sendStatus(200);
       } catch (error) {
         console.error("閲覧権限変更処理でエラーが発生:", error.response?.data || error.message);
         await sendReplyMessage(roomId, `エラーが発生しました。`, { accountId, messageId });
         return res.sendStatus(500);
       }
     }
-  } 
-
-  // /countコマンドに反応
-  if (body.includes('/count')) {
-    console.log(`「/count」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
-    try {
-      const filePath = await downloadCountImage();
-      const fileId = await uploadImageToChatwork(filePath, roomId);
-      const countMessage = `君は何番目かな？`;
-      await sendReplyMessage(roomId, countMessage, { accountId, messageId });
-      return res.sendStatus(200);
-    } catch (error) {
-      console.error("画像送信処理でエラーが発生:", error);
-      await sendReplyMessage(roomId, '画像の送信に失敗しました。', { accountId, messageId });
-      return res.sendStatus(500);
-    }
   }
+
   // URLを含むメッセージをチェック
   const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
   if (body.match(groupUrlRegex)) {
     if (userWarningCount[accountId] >= 1) {
-      // 2回目以降の投稿の場合、権限を閲覧に変更
       console.log(`アカウントID ${accountId} が規約違反URLを2回以上投稿しました。権限を閲覧に変更します。`);
       try {
         await changeMemberPermission(roomId, accountId, 'readonly');
-        delete userWarningCount[accountId]; // カウントをリセット
+        delete userWarningCount[accountId];
         return res.sendStatus(200);
       } catch (error) {
         console.error("URL違反による権限変更でエラー:", error);
         return res.sendStatus(500);
       }
     } else {
-      // 1回目の投稿の場合、警告メッセージを返信
       console.log(`アカウントID ${accountId} が規約違反URLを投稿しました。警告します。`);
       const warningMessage = `このURLの投稿は許可されていません。再度投稿された場合、権限が変更されます。`;
       try {
@@ -292,30 +291,8 @@ app.post('/webhook', async (req, res) => {
       }
     }
   }
-  
-  // QRコード生成コマンドに反応
-  if (body.startsWith('/QR ')) {
-    const textToEncode = body.substring(4); // "/QR "の4文字を除去
-    if (textToEncode.trim() === '') {
-        await sendReplyMessage(roomId, 'QRコードにしたいURLまたはテキストを指定してください。', { accountId, messageId });
-        return res.sendStatus(200);
-    }
-    console.log(`QRコード生成コマンドを受信しました。対象テキスト: ${textToEncode}`);
-    try {
-      const filePath = await generateQRCodeImage(textToEncode);
-      const fileId = await uploadImageToChatwork(filePath, roomId);
-      const qrMessage = `QRコードだよ！`;
-      await sendReplyMessage(roomId, qrMessage, { accountId, messageId });
-      return res.sendStatus(200);
-    } catch (error) {
-      console.error("QRコード生成処理でエラーが発生:", error.response?.data || error.message);
-      await sendReplyMessage(roomId, 'QRコードの生成に失敗しました。', { accountId, messageId });
-      return res.sendStatus(500);
-    }
-  }
-  
+
   // YouTubeの動画URLに反応する
-  // 新しい正規表現はyoutu.beとyoutube.comの両方に対応します
   const youtubeUrlRegex = /\/youtube\/(https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/watch\?v=)[a-zA-Z0-9_-]+)(?:\?.+)?/;
   const youtubeMatch = body.match(youtubeUrlRegex);
   if (youtubeMatch) {
@@ -331,11 +308,8 @@ app.post('/webhook', async (req, res) => {
         const thumbnail = videoData.thumbnail;
         const downloadUrl = videoData.downloads[0].url;
 
-        // 最初のメッセージを送信
         const infoMessage = `[info][title]${title}[/title][code]${downloadUrl}[/code][/info]`;
         await sendReplyMessage(roomId, infoMessage, { accountId, messageId });
-
-        // サムネイルをダウンロードして送信
         await downloadAndUploadImage(thumbnail, roomId);
 
         console.log("YouTube動画情報送信成功");
@@ -344,28 +318,13 @@ app.post('/webhook', async (req, res) => {
         await sendReplyMessage(roomId, `動画情報の取得に失敗しました。`, { accountId, messageId });
         return res.sendStatus(200);
       }
-
     } catch (error) {
       console.error("YouTube処理でエラー:", error.response?.data || error.message);
       await sendReplyMessage(roomId, `エラーが発生しました。再度お試しください。`, { accountId, messageId });
       return res.sendStatus(500);
     }
   }
-  // 「おみくじ」に反応する（メッセージへの返信）
-  if (body === 'おみくじ') {
-    console.log(`「おみくじ」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
-    try {
-      const result = drawFortune();
-      const message = `${result}`;
-      await sendReplyMessage(roomId, message, { accountId, messageId });
-      return res.sendStatus(200);
-    } catch (error) {
-      console.error("おみくじ処理でエラーが発生:", error);
-      return res.sendStatus(500);
-    }
-  }
 
-  // 特定のアカウントID(9510804)からの「復活」メッセージに反応する
   if (accountId === 9510804 && body.includes('復活')) {
     console.log(`アカウントID ${accountId} から「復活」メッセージを受信しました。権限を管理者に変更します。`);
     try {
@@ -377,13 +336,13 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
-  // 管理者からのメッセージは無視（「復活」コマンドより後に配置）
   if (accountId === ADMIN_ACCOUNT_ID) {
     console.log(`管理者からのメッセージを受信しました: ${accountId}`);
     return res.sendStatus(200);
   }
-  
-if (body.includes('[toall]') && !senderIsAdmin) {
+
+  // [toall]が含まれていたら権限を閲覧に変更 (管理者を除く)
+  if (body.includes('[toall]') && !senderIsAdmin) {
     console.log(`[toall]が含まれています。ユーザーの権限を閲覧に変更します。`);
     try {
       await changeMemberPermission(roomId, accountId, 'readonly');
@@ -392,7 +351,8 @@ if (body.includes('[toall]') && !senderIsAdmin) {
       console.error("[toall]処理でエラー:", error);
       return res.sendStatus(500);
     }
-}
+  }
+
   // Zalgoテキストが含まれていたら権限を閲覧に変更
   const zalgoPattern = /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/;
   if (zalgoPattern.test(body)) {
@@ -405,7 +365,8 @@ if (body.includes('[toall]') && !senderIsAdmin) {
       return res.sendStatus(500);
     }
   }
-// 文字数が1000文字以上であれば権限を閲覧に変更
+
+  // 文字数が1000文字以上であれば権限を閲覧に変更
   if (body.length >= 1000) {
     console.log(`メッセージが1000文字以上です。ユーザーの権限を閲覧に変更します。`);
     try {
@@ -417,7 +378,7 @@ if (body.includes('[toall]') && !senderIsAdmin) {
     }
   }
   
-  // 絵文字が15個以上含まれていたら権限を閲覧に変更
+  // 絵文字が15個以上含まれていたら権限を閲覧に変更 (管理者を除く)
   const emojiCount = countEmojis(body, EMOJI_LIST);
   if (emojiCount >= 15 && !senderIsAdmin) {
     console.log(`絵文字が15個以上含まれています (${emojiCount}個)。ユーザーの権限を閲覧に変更します。`);
@@ -429,22 +390,7 @@ if (body.includes('[toall]') && !senderIsAdmin) {
       return res.sendStatus(500);
     }
   }
-  // 「画像送ってみて」という投稿に反応する
-  if (body === '画像送ってみて') {
-    console.log(`「画像送ってみて」メッセージを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
-    try {
-      const filePath = await downloadRandomImage();
-      const fileId = await uploadImageToChatwork(filePath, roomId);
-      const imageMessage = `画像だよ！`;
-      await sendReplyMessage(roomId, imageMessage, { accountId, messageId });
-      return res.sendStatus(200);
-    } catch (error) {
-      console.error("画像送信処理でエラーが発生:", error);
-      return res.sendStatus(500);
-    }
-  }
 
-  // それ以外のメッセージには何もしない
   console.log(`その他のメッセージを受信しました: ${body}`);
   return res.sendStatus(200);
 });
@@ -463,11 +409,6 @@ async function generateQRCodeImage(text) {
   }
 }
 
-/**
- * 通常のメッセージを送信します（返信形式ではない）。
- * @param {string} roomId 送信先のルームID
- * @param {string} message 送信するメッセージ本文
- */
 async function sendMessage(roomId, message) {
   try {
     await axios.post(
@@ -487,11 +428,6 @@ async function sendMessage(roomId, message) {
   }
 }
 
-/**
- * 指定されたメッセージを削除します。
- * @param {string} roomId 削除対象のメッセージがあるルームID
- * @param {string} messageId 削除するメッセージのID
- */
 async function deleteMessage(roomId, messageId) {
   try {
     await axios.delete(
@@ -507,11 +443,6 @@ async function deleteMessage(roomId, messageId) {
   }
 }
 
-/**
- * 画像をダウンロードし、Chatworkにアップロードして、ローカルから削除します。
- * @param {string} imageUrl 画像のURL
- * @param {string} roomId ルームID
- */
 async function downloadAndUploadImage(imageUrl, roomId) {
   const filePath = path.join('/tmp', `thumbnail_${Date.now()}.jpg`);
   try {
@@ -543,44 +474,31 @@ async function downloadAndUploadImage(imageUrl, roomId) {
   }
 }
 
-
-/**
- * 特定のURLから画像をダウンロードします。
- * @returns {string} ダウンロードした一時ファイルのパス
- */
 async function downloadCountImage() {
   const imageUrl = 'https://count.getloli.com/@yuyuyuzu?name=yuyuyuzu&theme=gelbooru&padding=5&offset=0&align=top&scale=1&pixelated=0&darkmode=auto';
   const filePath = path.join('/tmp', `count_image_${Date.now()}.png`);
   try {
-      const response = await axios.get(imageUrl, {
-          responseType: 'arraybuffer',
-          headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-          }
-      });
-      await fsp.writeFile(filePath, response.data);
-      console.log("カウント画像ダウンロード成功:", filePath);
-      return filePath;
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+      }
+    });
+    await fsp.writeFile(filePath, response.data);
+    console.log("カウント画像ダウンロード成功:", filePath);
+    return filePath;
   } catch (error) {
     console.error("カウント画像ダウンロードエラー:", error);
     throw error;
   }
 }
 
-
-/**
- * おみくじの結果をランダムに取得します。
- * @returns {string} おみくじの結果
- */
 function drawFortune() {
   const fortunes = ['大吉', '吉', '中吉', '小吉', '末吉', '凶', '大凶'];
   const randomIndex = Math.floor(Math.random() * fortunes.length);
   return fortunes[randomIndex];
 }
 
-/**
- * 誰かに返信メッセージを送信します。
- */
 async function sendReplyMessage(roomId, message, replyData) {
   const { accountId, messageId } = replyData;
   try {
@@ -601,8 +519,6 @@ async function sendReplyMessage(roomId, message, replyData) {
     throw error;
   }
 }
-
-// --- 既存の機能 ---
 
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -660,10 +576,10 @@ async function downloadRandomImage() {
   const imageUrl = 'https://pic.re/image';
   const filePath = path.join('/tmp', `image_${Date.now()}.jpg`);
   try {
-      const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-      await fsp.writeFile(filePath, response.data);
-      console.log("画像ダウンロード成功:", filePath);
-      return filePath;
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    await fsp.writeFile(filePath, response.data);
+    console.log("画像ダウンロード成功:", filePath);
+    return filePath;
   } catch (error) {
     console.error("画像ダウンロードエラー:", error);
     throw error;
@@ -695,6 +611,7 @@ async function uploadImageToChatwork(filePath, roomId) {
     }
   }
 }
+
 // サーバーを起動
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
