@@ -115,6 +115,21 @@ app.post('/webhook', async (req, res) => {
     }
   } 
 
+  // /countコマンドに反応
+  if (body.includes('/count')) {
+    console.log(`「/count」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
+    try {
+      const filePath = await downloadCountImage();
+      const fileId = await uploadImageToChatwork(filePath, roomId);
+      const countMessage = `君は何番目かな？`;
+      await sendReplyMessage(roomId, countMessage, { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("画像送信処理でエラーが発生:", error);
+      await sendReplyMessage(roomId, '画像の送信に失敗しました。', { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
   // URLを含むメッセージをチェック
   const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
   if (body.match(groupUrlRegex)) {
@@ -396,6 +411,23 @@ async function downloadAndUploadImage(imageUrl, roomId) {
   }
 }
 
+/**
+ * 特定のURLから画像をダウンロードします。
+ * @returns {string} ダウンロードした一時ファイルのパス
+ */
+async function downloadCountImage() {
+  const imageUrl = 'https://count.getloli.com/@yuyuyuzu?name=yuyuyuzu&theme=gelbooru&padding=5&offset=0&align=top&scale=1&pixelated=0&darkmode=auto';
+  const filePath = path.join('/tmp', `count_image_${Date.now()}.png`);
+  try {
+      const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      await fsp.writeFile(filePath, response.data);
+      console.log("カウント画像ダウンロード成功:", filePath);
+      return filePath;
+  } catch (error) {
+    console.error("カウント画像ダウンロードエラー:", error);
+    throw error;
+  }
+}
 /**
  * おみくじの結果をランダムに取得します。
  * @returns {string} おみくじの結果
