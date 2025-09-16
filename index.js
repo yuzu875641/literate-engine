@@ -411,6 +411,7 @@ async function downloadAndUploadImage(imageUrl, roomId) {
   }
 }
 
+
 /**
  * 特定のURLから画像をダウンロードします。
  * @returns {string} ダウンロードした一時ファイルのパス
@@ -419,7 +420,12 @@ async function downloadCountImage() {
   const imageUrl = 'https://count.getloli.com/@yuyuyuzu?name=yuyuyuzu&theme=gelbooru&padding=5&offset=0&align=top&scale=1&pixelated=0&darkmode=auto';
   const filePath = path.join('/tmp', `count_image_${Date.now()}.png`);
   try {
-      const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      const response = await axios.get(imageUrl, {
+          responseType: 'arraybuffer',
+          headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+          }
+      });
       await fsp.writeFile(filePath, response.data);
       console.log("カウント画像ダウンロード成功:", filePath);
       return filePath;
@@ -428,6 +434,7 @@ async function downloadCountImage() {
     throw error;
   }
 }
+
 /**
  * おみくじの結果をランダムに取得します。
  * @returns {string} おみくじの結果
