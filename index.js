@@ -74,8 +74,9 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(500);
       }
     }
+    
 // /onlyreads コマンドの処理
-  if (body === '/onlyreads') {
+  if (body.includes('/onlyreads')) { // <-- ここを修正
     console.log(`「/onlyreads」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
     try {
       const response = await axios.get(
@@ -126,8 +127,6 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
-
-
     // /release コマンドの処理
   if (body === '/release') {
     console.log(`「/release」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
