@@ -9,6 +9,7 @@ const app = express();
 app.use(express.json());
 
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
+const CHATWORK_API_TOKEN1 = process.env.CHATWORK_API_TOKEN1;
 const ADMIN_ACCOUNT_ID = 10617115; //　自分自身を無視するようにしたいけどIDの取得だるいから直接入れ込みます
 
 const EMOJI_LIST = [
@@ -61,6 +62,73 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
+  // /roominfo/[roomid] コマンドに反応
+  if (body.trim().startsWith('/roominfo/')) {
+    const requestedRoomId = body.trim().substring(10);
+    console.log(`「/roominfo」コマンドを受信しました。リクエストされたルームID: ${requestedRoomId}`);
+
+    let roomInfo, members;
+
+    // トークン1で情報取得を試みる
+    try {
+      const roomInfoResponse = await axios.get(
+        `https://api.chatwork.com/v2/rooms/${requestedRoomId}`, {
+          headers: {
+            'X-ChatWorkToken': CHATWORK_API_TOKEN
+          }
+        }
+      );
+      roomInfo = roomInfoResponse.data;
+
+      const membersResponse = await axios.get(
+        `https://api.chatwork.com/v2/rooms/${requestedRoomId}/members`, {
+          headers: {
+            'X-ChatWorkToken': CHATWORK_API_TOKEN
+          }
+        }
+      );
+      members = membersResponse.data;
+    } catch (error) {
+      console.error(`メインのAPIトークンで情報取得失敗。サブトークンで再試行します。`);
+
+      // トークン2で情報取得を再試行
+      try {
+        const roomInfoResponse = await axios.get(
+          `https://api.chatwork.com/v2/rooms/${requestedRoomId}`, {
+            headers: {
+              'X-ChatWorkToken': CHATWORK_API_TOKEN1
+            }
+          }
+        );
+        roomInfo = roomInfoResponse.data;
+
+        const membersResponse = await axios.get(
+          `https://api.chatwork.com/v2/rooms/${requestedRoomId}/members`, {
+            headers: {
+              'X-ChatWorkToken': CHATWORK_API_TOKEN1
+            }
+          }
+        );
+        members = membersResponse.data;
+      } catch (subError) {
+        // 2つのトークンすべてで失敗した場合
+        console.error(`すべてのAPIトークンで情報取得失敗（ルームID: ${requestedRoomId}）:`, subError.response?.data || subError.message);
+        await sendReplyMessage(roomId, `ごめん、その部屋の情報はわからないよ。`, { accountId, messageId });
+        return res.sendStatus(500);
+      }
+    }
+
+    // 両方のトークンで失敗しなかった場合、情報を送信
+    const message = `[info][title]${roomInfo.name}(${roomInfo.room_id})[/title]
+メンバー数: ${members.length}
+メッセージ数: ${roomInfo.message_num}
+ファイル数: ${roomInfo.file_num}
+タスク数: ${roomInfo.task_num}
+[/info]`;
+
+    await sendReplyMessage(roomId, message, { accountId, messageId });
+    return res.sendStatus(200);
+  }
   // /info コマンドに反応
   if (body.trim().startsWith('/info')) {
     console.log(`「/info」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
