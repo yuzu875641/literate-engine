@@ -358,9 +358,11 @@ app.post('/webhook', async (req, res) => {
   }
 
   // Zalgoテキストが含まれていたら権限を閲覧に変更
-  const zalgoPattern = /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/;
-  if (zalgoPattern.test(body)) {
-    console.log(`Zalgoテキストが含まれています。ユーザーの権限を閲覧に変更します。`);
+  const zalgoPattern = /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/g;
+  const zalgoMatches = body.match(zalgoPattern);
+  const zalgoCount = zalgoMatches ? zalgoMatches.length : 0;
+  if (zalgoCount >= 5) {
+    console.log(`Zalgoテキストが${zalgoCount}個含まれています。ユーザーの権限を閲覧に変更します。`);
     try {
       await changeMemberPermission(roomId, accountId, 'readonly');
       return res.sendStatus(200);
@@ -369,7 +371,6 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
-
   // 文字数が1000文字以上であれば権限を閲覧に変更
   if (body.length >= 1000) {
     console.log(`メッセージが1000文字以上です。ユーザーの権限を閲覧に変更します。`);
