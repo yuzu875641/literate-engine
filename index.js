@@ -60,6 +60,7 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
+
   // /info コマンドに反応
   if (body.trim().startsWith('/info')) {
     console.log(`「/info」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
@@ -82,14 +83,11 @@ app.post('/webhook', async (req, res) => {
       );
       const members = membersResponse.data;
 
-      const message = `[info][title]ルーム情報[/title]
-ルーム名: ${roomInfo.name}
-ルームID: ${roomInfo.room_id}
+      const message = `[info][title]${roomInfo.name}(${roomInfo.room_id})[/title]
 メンバー数: ${members.length}
-メッセージ数: ${roomInfo.num_messages}
-ファイル数: ${roomInfo.num_files}
-タスク数: ${roomInfo.num_tasks}
-作成者: ${roomInfo.sticky.account_id}
+メッセージ数: ${roomInfo.message_num}
+ファイル数: ${roomInfo.file_num}
+タスク数: ${roomInfo.task_num}
 [/info]`;
 
       await sendReplyMessage(roomId, message, { accountId, messageId });
@@ -100,7 +98,7 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
-
+  
   // /countコマンドに反応
   if (body.includes('/count')) {
     console.log(`「/count」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
