@@ -60,6 +60,46 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
+  // /info コマンドに反応
+  if (body.trim().startsWith('/info')) {
+    console.log(`「/info」コマンドを受信しました。roomId: ${roomId}, accountId: ${accountId}`);
+    try {
+      const roomInfoResponse = await axios.get(
+        `https://api.chatwork.com/v2/rooms/${roomId}`, {
+          headers: {
+            'X-ChatWorkToken': CHATWORK_API_TOKEN
+          }
+        }
+      );
+      const roomInfo = roomInfoResponse.data;
+
+      const membersResponse = await axios.get(
+        `https://api.chatwork.com/v2/rooms/${roomId}/members`, {
+          headers: {
+            'X-ChatWorkToken': CHATWORK_API_TOKEN
+          }
+        }
+      );
+      const members = membersResponse.data;
+
+      const message = `[info][title]ルーム情報[/title]
+ルーム名: ${roomInfo.name}
+ルームID: ${roomInfo.room_id}
+メンバー数: ${members.length}
+メッセージ数: ${roomInfo.num_messages}
+ファイル数: ${roomInfo.num_files}
+タスク数: ${roomInfo.num_tasks}
+作成者: ${roomInfo.sticky.account_id}
+[/info]`;
+
+      await sendReplyMessage(roomId, message, { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("infoコマンド処理でエラー:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, 'ルーム情報の取得に失敗しました。', { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
 
   // /countコマンドに反応
   if (body.includes('/count')) {
