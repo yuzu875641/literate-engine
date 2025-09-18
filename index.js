@@ -25,7 +25,8 @@ const EMOJI_LIST = [
 const userWarningCount = {};
 // メンバーの権限を部屋別にバックアップするオブジェクト
 const member_backup = {};
-
+// 部屋ごとのURLチェックの状態を記憶するオブジェクト
+const urlCheckStatus = {};
 // ウェブフックのエンドポイント
 app.post('/webhook', async (req, res) => {
   const webhookEvent = req.body.webhook_event;
@@ -327,8 +328,33 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
+  
+// /invalid コマンドに反応 (管理者のみ)
+  if (body.trim().startsWith('/invalid')) {
+    console.log(`「/invalid」コマンドを受信しました。roomId: ${roomId}`);
+    if (!senderIsAdmin) {
+      await sendReplyMessage(roomId, 'このコマンドは管理者のみ使用できます。', { accountId, messageId });
+      return res.sendStatus(200);
+    }
+    
+    urlCheckStatus[roomId] = false;
+    await sendReplyMessage(roomId, 'URLチェックを無効化しました。', { accountId, messageId });
+    return res.sendStatus(200);
+  }
 
+// /enable コマンドに反応 (管理者のみ)
+  if (body.trim().startsWith('/enable')) {
+    console.log(`「/enable」コマンドを受信しました。roomId: ${roomId}`);
+    if (!senderIsAdmin) {
+      await sendReplyMessage(roomId, 'このコマンドは管理者のみ使用できます。', { accountId, messageId });
+      return res.sendStatus(200);
+    }
 
+    urlCheckStatus[roomId] = true;
+    await sendReplyMessage(roomId, 'URLチェックを有効化しました。', { accountId, messageId });
+    return res.sendStatus(200);
+  }
+  
   // その他のメッセージルールを処理
   if (replyMatch) {
     const targetAccountId = replyMatch[1];
@@ -376,32 +402,35 @@ app.post('/webhook', async (req, res) => {
   }
 
   // URLを含むメッセージをチェック
-  const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
-  if (body.match(groupUrlRegex)) {
-    if (userWarningCount[accountId] >= 1) {
-      console.log(`アカウントID ${accountId} が規約違反URLを2回以上投稿しました。権限を閲覧に変更します。`);
-      try {
-        await changeMemberPermission(roomId, accountId, 'readonly');
-        delete userWarningCount[accountId];
-        return res.sendStatus(200);
-      } catch (error) {
-        console.error("URL違反による権限変更でエラー:", error);
-        return res.sendStatus(500);
-      }
-    } else {
-      console.log(`アカウントID ${accountId} が規約違反URLを投稿しました。警告します。`);
-      const warningMessage = `このURLの投稿は許可されていません。再度投稿された場合、権限が変更されます。`;
-      try {
-        await sendReplyMessage(roomId, warningMessage, { accountId, messageId });
-        userWarningCount[accountId] = 1;
-        return res.sendStatus(200);
-      } catch (error) {
-        console.error("URL違反警告でエラー:", error);
-        return res.sendStatus(500);
+  // URLチェックが有効な場合のみ実行
+  if (urlCheckStatus[roomId] !== false) { // 初期値は undefined で true と判定される
+    const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
+    if (body.match(groupUrlRegex)) {
+      if (userWarningCount[accountId] >= 1) {
+        console.log(`アカウントID ${accountId} が規約違反URLを2回以上投稿しました。権限を閲覧に変更します。`);
+        try {
+          await changeMemberPermission(roomId, accountId, 'readonly');
+          delete userWarningCount[accountId];
+          return res.sendStatus(200);
+        } catch (error) {
+          console.error("URL違反による権限変更でエラー:", error);
+          return res.sendStatus(500);
+        }
+      } else {
+        console.log(`アカウントID ${accountId} が規約違反URLを投稿しました。警告します。`);
+        const warningMessage = `このURLの投稿は許可されていません。再度投稿された場合、権限が変更されます。`;
+        try {
+          await sendReplyMessage(roomId, warningMessage, { accountId, messageId });
+          userWarningCount[accountId] = 1;
+          return res.sendStatus(200);
+        } catch (error) {
+          console.error("URL違反警告でエラー:", error);
+          return res.sendStatus(500);
+        }
       }
     }
   }
-
+  
   // YouTubeの動画URLに反応する
   const youtubeUrlRegex = /\/youtube\/(https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/watch\?v=)[a-zA-Z0-9_-]+)(?:\?.+)?/;
   const youtubeMatch = body.match(youtubeUrlRegex);
