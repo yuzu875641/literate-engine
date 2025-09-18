@@ -11,7 +11,10 @@ app.use(express.json());
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
 const CHATWORK_API_TOKEN1 = process.env.CHATWORK_API_TOKEN1;
 const ADMIN_ACCOUNT_ID = 10617115; //　自分自身を無視するようにしたいけどIDの取得だるいから直接入れ込みます
-
+// アクセスを禁止するドメインのブラックリスト
+const BLACKLISTED_DOMAINS = [
+  'www.croxyproxy.com'
+];
 const EMOJI_LIST = [
   ':)', ':(', ':D', '8-)', ':o', ';)', ':(', '(sweat)', ':|', ':*', ':p', '(blush)',
   ':^)', '|-)', '(inlove)', ']:)', '(talk)', '(yawn)', '(puke)', '(emo)', '8-|', ':#',
@@ -197,6 +200,59 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
+
+
+  if (body.trim().startsWith('/see ')) {
+    const url = body.trim().substring(5);
+    let htmlFilePath = null;
+    let imageFilePath = null;
+    try {
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(url);
+      } catch (e) {
+        await sendReplyMessage(roomId, '有効なURLではありません。', { accountId, messageId });
+        return res.sendStatus(200);
+      }
+      const domain = parsedUrl.hostname;
+      if (BLACKLISTED_DOMAINS.includes(domain)) {
+        await sendReplyMessage(roomId, 'そのサイトは安全のためアクセスできません。', { accountId, messageId });
+        return res.sendStatus(200);
+      }
+      const response = await axios.get(url, {
+        responseType: 'text',
+        timeout: 5000,
+        maxContentLength: 1000000
+      });
+      const html = response.data;
+      htmlFilePath = path.join('/tmp', `html_${Date.now()}.html`);
+      await fsp.writeFile(htmlFilePath, html);
+      const dom = new JSDOM(html);
+      const images = dom.window.document.querySelectorAll('img');
+      if (images.length === 0) {
+        await sendReplyMessage(roomId, 'このページに画像が見つかりませんでした。', { accountId, messageId });
+        return res.sendStatus(200);
+      }
+      const firstImageSrc = images[0].src;
+      const imageUrl = new URL(firstImageSrc, url).href;
+      imageFilePath = await downloadImage(imageUrl);
+      await uploadImageToChatwork(imageFilePath, roomId);
+      await sendReplyMessage(roomId, '最初の画像だよ！', { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("URLアクセスまたは画像送信エラー:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, '画像の取得に失敗しました。URLが有効であるか、ページに画像があるか確認してください。', { accountId, messageId });
+      return res.sendStatus(500);
+    } finally {
+      if (htmlFilePath) {
+        try { await fsp.unlink(htmlFilePath); } catch (e) { console.error('HTMLファイル削除エラー:', e); }
+      }
+      if (imageFilePath) {
+        try { await fsp.unlink(imageFilePath); } catch (e) { console.error('画像ファイル削除エラー:', e); }
+      }
+    }
+  }
+
   
   // 「画像送ってみて」という投稿に反応する
   if (body === '画像送ってみて') {
@@ -536,6 +592,21 @@ app.post('/webhook', async (req, res) => {
 });
 
 // --- 新しい機能 ---
+
+async function downloadImage(imageUrl) {
+  const filePath = path.join('/tmp', `image_${Date.now()}.jpg`);
+  const writer = fs.createWriteStream(filePath);
+  const response = await axios({
+    url: imageUrl,
+    method: 'GET',
+    responseType: 'stream'
+  });
+  response.data.pipe(writer);
+  return new Promise((resolve, reject) => {
+    writer.on('finish', () => resolve(filePath));
+    writer.on('error', (err) => reject(err));
+  });
+}
 
 async function generateQRCodeImage(text) {
   const filePath = path.join('/tmp', `qrcode_${Date.now()}.png`);
