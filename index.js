@@ -5,6 +5,7 @@ const fsp = require('fs').promises; // fs.promisesモジュール
 const path = require('path');
 const qrcode = require('qrcode');　// QRコードを簡単に生成！
 const FormData = require('form-data');
+const { JSDOM } = require('jsdom');
 const app = express();
 app.use(express.json());
 
