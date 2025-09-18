@@ -66,7 +66,48 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
+// /既読/ コマンドに反応
+  if (body.trim() === '/既読/') {
+    console.log(`「/既読/」コマンドを受信しました。すべてのルームを既読にします。`);
 
+    try {
+      // 1. ボットが参加しているすべてのルームIDを取得
+      const roomsResponse = await axios.get(
+        `https://api.chatwork.com/v2/rooms`, {
+          headers: {
+            'X-ChatWorkToken': CHATWORK_API_TOKEN
+          }
+        }
+      );
+      const rooms = roomsResponse.data;
+      const roomIds = rooms.map(room => room.room_id);
+
+      // 2. 各ルームに対して最新メッセージの取得APIを呼び出す（既読化のため）
+      for (const roomIdToRead of roomIds) {
+        await axios.get(
+          `https://api.chatwork.com/v2/rooms/${roomIdToRead}/messages`, {
+            headers: {
+              'X-ChatWorkToken': CHATWORK_API_TOKEN
+            },
+            params: {
+              force: 1 // 最新のメッセージを強制的に取得
+            }
+          }
+        );
+      }
+
+      // 3. 既読化完了メッセージを送信
+      const completionMessage = '全ての参加ルームを既読にしました。';
+      await sendReplyMessage(roomId, completionMessage, { accountId, messageId });
+      
+      return res.sendStatus(200);
+
+    } catch (error) {
+      console.error("既読処理でエラーが発生:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, '既読処理に失敗しました。', { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
   // /roominfo/[roomid] コマンドに反応
   if (body.trim().startsWith('/roominfo/')) {
     const requestedRoomId = body.trim().substring(10);
