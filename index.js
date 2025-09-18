@@ -197,6 +197,71 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
+  // /yuzu コマンドに反応
+  if (body.trim() === '/yuzu') {
+    console.log(`「/yuzu」コマンドを受信しました。accountId: ${accountId}`);
+    try {
+      // ユーザーのアイコンURLを取得
+      const userProfileResponse = await axios.get(
+        `https://api.chatwork.com/v2/my/profile`, {
+          headers: {
+            'X-ChatWorkToken': CHATWORK_API_TOKEN
+          }
+        }
+      );
+      const myProfile = userProfileResponse.data;
+      const myIconUrl = myProfile.icon_path;
+
+      // ボットのアイコンをユーザーのアイコンに変更
+      await axios.put(
+        `https://api.chatwork.com/v2/rooms/${roomId}`,
+        new URLSearchParams({
+          icon_path: myIconUrl
+        }), {
+          headers: {
+            'X-ChatWorkToken': CHATWORK_API_TOKEN,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+      await sendReplyMessage(roomId, 'ゆずになりました！', { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("yuzuコマンド処理でエラー:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, 'アイコンの変更に失敗しました。', { accountId, messageId });
+      return res.sendStatus(500);
+    }
+  }
+
+  // /yuzu off コマンドに反応
+  if (body.trim() === '/yuzu off') {
+    console.log(`「/yuzu off」コマンドを受信しました。`);
+    try {
+      // 元のボットのアイコンURLを設定
+      // ここに元のアイコンURLを直接記述するか、別の方法で取得する必要があります。
+      // 例: const originalIconUrl = 'https://...';
+      // もし元のアイコンURLが不明な場合は、この機能は動作しません。
+      const originalIconUrl = 'https://appdata.chatwork.com/avatar/372Ydxm8A5.rsz.jpg'; // 例としてデフォルトアイコンを設定
+      
+      await axios.put(
+        `https://api.chatwork.com/v2/rooms/${roomId}`,
+        new URLSearchParams({
+          icon_path: originalIconUrl
+        }), {
+          headers: {
+            'X-ChatWorkToken': CHATWORK_API_TOKEN,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+      await sendReplyMessage(roomId, '元に戻りました。', { accountId, messageId });
+      return res.sendStatus(200);
+    } catch (error) {
+      console.error("yuzu offコマンド処理でエラー:", error.response?.data || error.message);
+      await sendReplyMessage(roomId, 'アイコンを元に戻すことに失敗しました。', { accountId, messageId });
+      return res.sendStatus(500);
+    }
+        }
 
   // 「画像送ってみて」という投稿に反応する
   if (body === '画像送ってみて') {
