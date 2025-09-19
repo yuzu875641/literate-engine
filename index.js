@@ -16,6 +16,12 @@ const ADMIN_ACCOUNT_ID = 10617115; //　自分自身を無視するようにし�
 const BLACKLISTED_DOMAINS = [
   'www.croxyproxy.com'
 ];
+const NO_URL_CHECK_ROOMS = [
+  12345678, // 例: 身内用ルームA
+  98765432, // 例: 身内用ルームB
+  402551519 // 例: ユーザーが指定したルーム
+];
+
 const EMOJI_LIST = [
   ':)', ':(', ':D', '8-)', ':o', ';)', ':(', '(sweat)', ':|', ':*', ':p', '(blush)',
   ':^)', '|-)', '(inlove)', ']:)', '(talk)', '(yawn)', '(puke)', '(emo)', '8-|', ':#',
@@ -511,35 +517,35 @@ if (body.trim() === '/既読/') {
     }
   }
 
-  // URLを含むメッセージをチェック
-  // URLチェックが有効な場合のみ実行
-  if (urlCheckStatus[roomId] !== false) { // 初期値は undefined で true と判定される
-    const groupUrlRegex = /https:\/\/www\.chatwork\.com\/g\/[a-zA-Z0-9]+/;
-    if (body.match(groupUrlRegex)) {
-      if (userWarningCount[accountId] >= 1) {
-        console.log(`アカウントID ${accountId} が規約違反URLを2回以上投稿しました。権限を閲覧に変更します。`);
-        try {
-          await changeMemberPermission(roomId, accountId, 'readonly');
-          delete userWarningCount[accountId];
-          return res.sendStatus(200);
-        } catch (error) {
-          console.error("URL違反による権限変更でエラー:", error);
-          return res.sendStatus(500);
-        }
-      } else {
-        console.log(`アカウントID ${accountId} が規約違反URLを投稿しました。警告します。`);
-        const warningMessage = `このURLの投稿は許可されていません。再度投稿された場合、権限が変更されます。`;
-        try {
-          await sendReplyMessage(roomId, warningMessage, { accountId, messageId });
-          userWarningCount[accountId] = 1;
-          return res.sendStatus(200);
-        } catch (error) {
-          console.error("URL違反警告でエラー:", error);
-          return res.sendStatus(500);
+// URLを含むメッセージをチェック
+  if (!NO_URL_CHECK_ROOMS.includes(roomId)) {
+    if (urlCheckStatus[roomId] !== false) {
+      const groupUrlRegex = /https:\/\/www\.chatwork.com\/g\/[a-zA-Z0-9]+/;
+      if (body.match(groupUrlRegex)) {
+        if (userWarningCount[accountId] >= 1) {
+          try {
+            await changeMemberPermission(roomId, accountId, 'readonly');
+            delete userWarningCount[accountId];
+            return res.sendStatus(200);
+          } catch (error) {
+            console.error("URL違反による権限変更でエラー:", error);
+            return res.sendStatus(500);
+          }
+        } else {
+          const warningMessage = `このURLの投稿は許可されていません。再度投稿された場合、権限が変更されます。`;
+          try {
+            await sendReplyMessage(roomId, warningMessage, { accountId, messageId });
+            userWarningCount[accountId] = 1;
+            return res.sendStatus(200);
+          } catch (error) {
+            console.error("URL違反警告でエラー:", error);
+            return res.sendStatus(500);
+          }
         }
       }
     }
   }
+
   
   // YouTubeの動画URLに反応する
   const youtubeUrlRegex = /\/youtube\/(https?:\/\/(?:www\.)?(?:youtu\.be\/|youtube\.com\/watch\?v=)[a-zA-Z0-9_-]+)(?:\?.+)?/;
