@@ -12,7 +12,7 @@ const CHATWORK_API_TOKEN1 = process.env.CHATWORK_API_TOKEN1;
 // --- API呼び出し、ファイル操作など共通のヘルパー関数 ---
 
 async function sendReplyMessage(roomId, message, { accountId, messageId }) {
-  const replyMessage = `[rp aid=${accountId} to=${roomId}-${messageId}]${message}`;
+  const replyMessage = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]\n${message}`;
   await axios.post(
     `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
     new URLSearchParams({
