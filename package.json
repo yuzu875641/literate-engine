@@ -1,7 +1,7 @@
 {
-  "name": "ゆずbot",
+  "name": "chatwork-bot",
   "version": "1.0.0",
-  "description": "A Chatwork bot for a variety of tasks",
+  "description": "A Chatwork bot with various functionalities.",
   "main": "app.js",
   "scripts": {
     "start": "node app.js"
