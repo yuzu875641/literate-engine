@@ -49,6 +49,59 @@ app.post('/webhook', async (req, res) => {
   const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;　// 返信
   const replyMatch = body.match(replyRegex);
 
+  // /tops コマンドに反応
+if (body.trim() === '/tops') {
+  try {
+    const currentRoomList = await getChatworkRoomlist();
+    if (!initialRoomStats || initialRoomStats.length === 0 || !currentRoomList) {
+      await sendReplyMessage(roomId, 'メッセージ統計を開始していません。しばらくお待ちください。', { accountId, messageId });
+      return res.sendStatus(200);
+    }
+
+    const messageDiffs = calculateMessageDiffs(initialRoomStats, currentRoomList);
+    const top8Diffs = messageDiffs.slice(0, 8);
+
+    let chatworkMessage = `メッセージ数ランキングだよ！ (cracker)[info][title]メッセージ数ランキング[/title]\n`;
+    top8Diffs.forEach((item, index) => {
+      chatworkMessage += `[download:1681682877]${index + 1}位[/download] ${item.name}\n(ID: ${item.room_id}) - ${item.diff}コメ。[hr]`;
+    });
+    chatworkMessage += `[hr]統計開始: ${new Date(lastUpdateTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}[/info]`;
+
+    await sendReplyMessage(roomId, chatworkMessage, { accountId, messageId });
+    return res.sendStatus(200);
+  } catch (error) {
+    console.error("メッセージ数ランキング取得エラー:", error.response?.data || error.message);
+    await sendReplyMessage(roomId, 'ランキングの取得に失敗しました。', { accountId, messageId });
+    return res.sendStatus(500);
+  }
+}
+
+// /filetops コマンドに反応
+if (body.trim() === '/filetops') {
+  try {
+    const currentRoomList = await getChatworkRoomlist();
+    if (!initialRoomStats || initialRoomStats.length === 0 || !currentRoomList) {
+      await sendReplyMessage(roomId, 'ファイル統計を開始していません。しばらくお待ちください。', { accountId, messageId });
+      return res.sendStatus(200);
+    }
+
+    const fileDiffs = calculateFileDiffs(initialRoomStats, currentRoomList);
+    const top8Diffs = fileDiffs.slice(0, 8);
+
+    let chatworkMessage = `ファイル数ランキングだよ！(cracker)[info][title]ファイル数ランキング[/title]\n`;
+    top8Diffs.forEach((item, index) => {
+      chatworkMessage += `[download:1681682877]${index + 1}位[/download] ${item.name}\n(ID: ${item.room_id}) - ${item.diff}個。[hr]`;
+    });
+    chatworkMessage += `[hr]統計開始: ${new Date(lastUpdateTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}[/info]`;
+
+    await sendReplyMessage(roomId, chatworkMessage, { accountId, messageId });
+    return res.sendStatus(200);
+  } catch (error) {
+    console.error("ファイル数ランキング取得エラー:", error.response?.data || error.message);
+    await sendReplyMessage(roomId, 'ランキングの取得に失敗しました。', { accountId, messageId });
+    return res.sendStatus(500);
+  }
+}
   // 権限チェックの必要がないコマンドを先に処理
   // QRコード生成コマンドに反応
   if (body.startsWith('/QR ')) {
@@ -741,6 +794,47 @@ async function downloadAndUploadImage(imageUrl, roomId) {
       console.error("一時ファイルの削除に失敗しました:", err);
     }
   }
+}
+// calculateMessageDiffs関数
+function calculateMessageDiffs(initialList, currentList) {
+  if (!initialList || !currentList) {
+    return [];
+  }
+  const diffs = [];
+  currentList.forEach(currentRoom => {
+    const initialRoom = initialList.find(item => item.room_id === currentRoom.room_id);
+    if (initialRoom) {
+      const diff = currentRoom.message_num - initialRoom.message_num;
+      diffs.push({
+        room_id: currentRoom.room_id,
+        name: currentRoom.name,
+        diff,
+      });
+    }
+  });
+  diffs.sort((a, b) => b.diff - a.diff);
+  return diffs;
+}
+
+// calculateFileDiffs関数
+function calculateFileDiffs(initialList, currentList) {
+  if (!initialList || !currentList) {
+    return [];
+  }
+  const diffs = [];
+  currentList.forEach(currentRoom => {
+    const initialRoom = initialList.find(item => item.room_id === currentRoom.room_id);
+    if (initialRoom) {
+      const diff = currentRoom.file_num - initialRoom.file_num;
+      diffs.push({
+        room_id: currentRoom.room_id,
+        name: currentRoom.name,
+        diff,
+      });
+    }
+  });
+  diffs.sort((a, b) => b.diff - a.diff);
+  return diffs;
 }
 
 async function downloadCountImage() {
