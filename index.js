@@ -66,7 +66,6 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(500);
     }
   }
-
 // /既読/ コマンドに反応
 if (body.trim() === '/既読/') {
   console.log(`「/既読/」コマンドを受信しました。すべてのルームを既読にします。`);
@@ -83,38 +82,35 @@ if (body.trim() === '/既読/') {
     const rooms = roomsResponse.data;
     const roomIds = rooms.map(room => room.room_id);
 
-    // 2. 各ルームに対して最新メッセージの取得APIを呼び出す（既読化のため）
+    console.log(`ボットが参加しているルーム数: ${roomIds.length}`);
+
+    // 2. 各ルームに対して既読APIを呼び出す
     for (const roomIdToRead of roomIds) {
       try {
-        const messagesResponse = await axios.get(
-          `https://api.chatwork.com/v2/rooms/${roomIdToRead}/messages`, {
+        await axios.put(
+          `https://api.chatwork.com/v2/rooms/${roomIdToRead}/messages/read`,
+          new URLSearchParams(), // bodyは不要
+          {
             headers: {
-              'X-ChatWorkToken': CHATWORK_API_TOKEN
-            },
-            params: {
-              force: 1
+              'X-ChatWorkToken': CHATWORK_API_TOKEN,
+              'Content-Type': 'application/x-www-form-urlencoded'
             }
           }
         );
 
-        // 最新メッセージIDをログに出力
-        if (messagesResponse.data.length > 0) {
-          const latestMessageId = messagesResponse.data[0].message_id;
-          console.log(`ルームID ${roomIdToRead} の最新メッセージID: ${latestMessageId}`);
-        } else {
-          console.log(`ルームID ${roomIdToRead} にはメッセージがありません。`);
-        }
-        
         console.log(`ルームID ${roomIdToRead} の既読化が完了しました。`);
         
+        // 念のため、次のAPI呼び出しの前に少し待機
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
       } catch (error) {
+        // エラーが発生したルームのIDとエラー詳細をログに出力
         console.error(`ルームID ${roomIdToRead} の既読化に失敗しました。エラー:`, error.response?.data || error.message);
       }
     }
 
     // 3. 既読化完了メッセージを送信
     await sendReplyMessage(roomId, '全ての参加ルームを既読にしました。', { accountId, messageId });
-    
     return res.sendStatus(200);
 
   } catch (error) {
