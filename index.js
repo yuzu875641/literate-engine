@@ -17,9 +17,7 @@ const BLACKLISTED_DOMAINS = [
   'www.croxyproxy.com'
 ];
 const NO_URL_CHECK_ROOMS = [
-  12345678, // 例: 身内用ルームA
-  98765432, // 例: 身内用ルームB
-  402551519 // 例: ユーザーが指定したルーム
+  395403065,
 ];
 
 const EMOJI_LIST = [
