@@ -948,6 +948,22 @@ async function downloadRandomImage() {
     throw error;
   }
 }
+// ヘルパー関数: Chatworkのルームリストを取得
+async function getChatworkRoomlist() {
+  try {
+    const response = await axios.get(
+      `https://api.chatwork.com/v2/rooms`, {
+        headers: {
+          'X-ChatWorkToken': CHATWORK_API_TOKEN
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Chatworkルームリストの取得に失敗しました:", error.response?.data || error.message);
+    return null;
+  }
+}
 
 async function uploadImageToChatwork(filePath, roomId) {
   try {
