@@ -10,7 +10,8 @@ const {
   downloadAndUploadImage,
   getChatworkRoomlist,
   calculateMessageDiffs,
-  calculateFileDiffs
+  calculateFileDiffs,
+  initializeStats // 新たに追加
 } = require('./helpers');
 const axios = require('axios');
 const { JSDOM } = require('jsdom');
@@ -55,6 +56,19 @@ async function handleCommands(data) {
     }
   } catch (error) {
     console.error("メンバーリスト取得エラー:", error.response?.data || error.message);
+  }
+  
+  // --- /startコマンドを追加 ---
+  if (body.trim() === '/start') {
+    await sendReplyMessage(roomId, '強制的に統計データを再取得します。', { accountId, messageId });
+    try {
+      await initializeStats();
+      await sendReplyMessage(roomId, '統計データの取得が完了しました。', { accountId, messageId });
+      return;
+    } catch (error) {
+      await sendReplyMessage(roomId, '統計データの取得に失敗しました。', { accountId, messageId });
+      return;
+    }
   }
 
   // --- 一般ユーザー向けコマンド ---
