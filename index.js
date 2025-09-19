@@ -17,7 +17,7 @@ const BLACKLISTED_DOMAINS = [
   'www.croxyproxy.com'
 ];
 const NO_URL_CHECK_ROOMS = [
-  395403065,
+  395403065
 ];
 
 const EMOJI_LIST = [
