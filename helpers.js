@@ -141,7 +141,7 @@ async function initializeStats() {
   try {
     const roomlist = await getChatworkRoomlist();
     if (roomlist) {
-      // 外部から渡された変数に値を設定
+      // app.jsのグローバル変数に値を設定
       require('./app').initialRoomStats = roomlist;
       require('./app').lastUpdateTime = new Date().toISOString();
       console.log("初期統計データを取得しました。");
