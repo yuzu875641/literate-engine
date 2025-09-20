@@ -17,8 +17,7 @@ const handleReadCommand = require("./commands/read");
 const handleRandomCommand = require("./commands/random");
 const handleNowCommand = require("./commands/now");
 const handleDeleteCommand = require("./commands/delete");
-const handleMiaqCommand = require("./commands/miaq"); 
-
+const handleMiaqCommand = require("./commands/miq");
 const app = express();
 app.use(express.json());
 
