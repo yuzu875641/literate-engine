@@ -4,14 +4,16 @@ const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
+const fs_sync = require('fs'); // fsモジュールを同期的にインポート
 
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
 
+// 画像をChatworkにアップロードして送信する関数
 async function uploadAndSendMessage(roomId, filePath, fileName, replyBody) {
   try {
-    const fileData = await fs.readFile(filePath);
     const form = new FormData();
-    form.append('file', new Blob([fileData]), fileName);
+    // fs.createReadStream() でファイルから読み取り可能なストリームを作成する
+    form.append('file', fs_sync.createReadStream(filePath), fileName);
     form.append('message', replyBody);
 
     await axios.post(`https://api.chatwork.com/v2/rooms/${roomId}/files`, form, {
@@ -19,6 +21,9 @@ async function uploadAndSendMessage(roomId, filePath, fileName, replyBody) {
         'X-ChatWorkToken': CHATWORK_API_TOKEN,
         ...form.getHeaders()
       },
+      // FormDataをストリームとして扱う設定
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     });
 
     console.log(`File sent successfully: ${fileName}`);
