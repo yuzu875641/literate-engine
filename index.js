@@ -17,6 +17,9 @@ const handleReadCommand = require("./commands/read");
 const handleRandomCommand = require("./commands/random");
 const handleNowCommand = require("./commands/now");
 const handleDeleteCommand = require("./commands/delete");
+const handleTestCommand = require("./commands/test");
+const handleWikiCommand = require("./commands/wiki");
+
 
 const app = express();
 app.use(express.json());
@@ -93,13 +96,28 @@ app.post("/webhook", async (req, res) => {
   roomMessageCounts[roomId]++;
 
   // コマンドのルーティング
-  if (body.trim().startsWith('/info')) {
+  if (body.trim().startsWith('/info/')) {
     await handleInfoCommand(roomId, messageId, accountId);
     return res.status(200).end();
   }
 
   if (body.trim() === '/既読/') {
     await handleReadCommand(roomId, messageId, accountId);
+    return res.status(200).end();
+  }
+  if (body.startsWith("/test/")) {
+    const startTime = Date.now();
+    await handleTestCommand(roomId, messageId, accountId, startTime);
+    return res.status(200).end();
+  }
+
+  if (body.startsWith("/wiki/")) {
+    const keyword = body.replace('/wiki/', '').trim();
+    if (keyword) {
+      await handleWikiCommand(roomId, messageId, accountId, keyword);
+    } else {
+      await sendReplyMessage(roomId, 'キーワードを入力してください。', { accountId, messageId });
+    }
     return res.status(200).end();
   }
 
