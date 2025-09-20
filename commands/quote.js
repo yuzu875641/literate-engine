@@ -1,11 +1,12 @@
 const { sendReplyMessage, chatworkApi } = require("../config");
 
-module.exports = async (body, messageId, roomId, accountId, replyMessageId = null) => {
+module.exports = async (body, messageId, roomId, accountId) => {
   try {
+    const replyMatches = body.match(/\[rp aid=(\d+) to=(\d+)-(\d+)]/);
     let targetMessageId;
 
-    if (replyMessageId) {
-        targetMessageId = replyMessageId;
+    if (replyMatches) {
+        targetMessageId = replyMatches[3];
     } else {
         const matches = body.match(/\/quote\/(\d+)/);
         if (!matches || matches.length < 2) {
@@ -18,8 +19,11 @@ module.exports = async (body, messageId, roomId, accountId, replyMessageId = nul
     const response = await chatworkApi.get(`/rooms/${roomId}/messages/${targetMessageId}`);
     const message = response.data;
     const bodyText = message.body;
+    
+    // メッセージ本文内の返信タグを削除して整形
+    const cleanedBodyText = bodyText.replace(/\[rp aid=\d+ to=\d+-\d+]\n?/, '');
 
-    const quoteMessage = `[qt][qtmeta aid=${message.account_id} time=${message.send_time}]${bodyText}[/qt]`;
+    const quoteMessage = `[qt][qtmeta aid=${message.account_id} time=${message.send_time}]${cleanedBodyText}[/qt]`;
 
     await sendReplyMessage(roomId, quoteMessage, { accountId, messageId });
 
