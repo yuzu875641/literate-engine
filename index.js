@@ -141,8 +141,7 @@ async function uploadAndSendMessage(roomId, filePath, fileName, replyBody) {
 
     await axios.post(`https://api.chatwork.com/v2/rooms/${roomId}/files`, form, {
       headers: {
-        'X-ChatWorkToken': CHATWORK_API_TOKEN,
-        ...form.getHeaders()
+        'X-ChatWorkToken': CHATWORK_API_TOKEN
       },
     });
 
@@ -279,55 +278,57 @@ async function mememe(body, messageId, roomId, accountId) {
     return;
   }
   
-  const targetAccountId = matches[1];
-
+  const targetAccountId = parseInt(matches[1]);
   const currentTime = Date.now();
+
   if (getOk !== null && currentTime - getOk < 300000) {
     await sendReplyMessage(roomId, 'このコマンドは短い期間に連続して使用できません。', { accountId, messageId });
     return;
   }
-
+  
   try {
     const chatworkRoomlist = await getChatworkRoomlist();
-    const cwroomList = chatworkRoomlist.slice(0, 150);
-        
-    if (!cwroomList.length) {
-      await sendReplyMessage(roomId, 'データの取得に失敗しました。時間をおいてやってみてねー', { accountId, messageId });
+    if (!chatworkRoomlist || chatworkRoomlist.length === 0) {
+      await sendReplyMessage(roomId, 'ルームリストの取得に失敗しました。', { accountId, messageId });
       return;
     }
     
     const roomsWithUser = [];
     getOk = currentTime;
 
-    for (const room of cwroomList) {
-      const users = await getChatworkMembers(room.room_id);
-      if (!users || users.length === 0) {
-        continue;
-      }
-      
-      const userFound = users.find(user => user.account_id == targetAccountId);
+    const memberPromises = chatworkRoomlist.map(room => getChatworkMembers(room.room_id).then(members => ({
+      room,
+      members
+    })));
 
-      if (userFound) {
-        let roleString;
-        switch (userFound.role) {
-          case 'admin':
-            roleString = '管理者';
-            break;
-          case "member":
-            roleString = 'メンバー';
-            break;
-          case 'readonly':
-            roleString = '閲覧';
-            break;
-          default:
-            roleString = userFound.role;
-            break;
-        }
+    const results = await Promise.allSettled(memberPromises);
+
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value && result.value.members) {
+        const { room, members } = result.value;
+        const userFound = members.find(user => user.account_id === targetAccountId);
         
-        roomsWithUser.push(` ${room.name}\n(ID: ${room.room_id}) - ${roleString}`);
+        if (userFound) {
+          let roleString;
+          switch (userFound.role) {
+            case 'admin':
+              roleString = '管理者';
+              break;
+            case 'member':
+              roleString = 'メンバー';
+              break;
+            case 'readonly':
+              roleString = '閲覧';
+              break;
+            default:
+              roleString = userFound.role;
+              break;
+          }
+          roomsWithUser.push(` ${room.name}\n(ID: ${room.room_id}) - ${roleString}`);
+        }
       }
     }
-    
+
     if (roomsWithUser.length > 0) {
       const ssms = roomsWithUser.join('\n[hr]\n');
       await sendReplyMessage(roomId, `[piconname:${targetAccountId}]さんが入っているルーム\n[info]${ssms}[/info]`, { accountId, messageId });
@@ -335,7 +336,7 @@ async function mememe(body, messageId, roomId, accountId) {
       await sendReplyMessage(roomId, 'うーん、その利用者が入っているルームが見つかりません。', { accountId, messageId });
     }
   } catch (error) {
-    console.error('ユーザー検索エラー:', error.response ? error.response.data : error.message);
+    console.error('ユーザー検索エラー:', error.response?.data || error.message);
     await sendReplyMessage(roomId, 'ユーザー検索中にエラーが発生しました。', { accountId, messageId });
   }
 }
@@ -456,6 +457,36 @@ async function sendCurrentTime(messageId, roomId, accountId) {
   }
 }
 
+// 新しく追加する関数
+async function handlePopularCommand(roomId, messageId, accountId) {
+  try {
+    const sortedRooms = Object.keys(roomMessageCounts).sort((a, b) => roomMessageCounts[b] - roomMessageCounts[a]);
+    
+    if (sortedRooms.length === 0) {
+      await sendReplyMessage(roomId, 'まだ投稿数がカウントされていません。', { accountId, messageId });
+      return;
+    }
+    
+    const popularRoomId = sortedRooms[0];
+    const popularRoomCount = roomMessageCounts[popularRoomId];
+
+    const popularRoomInfo = await getChatworkRoom(popularRoomId);
+    
+    const message = `[info][title]最も活発なルーム[/title]
+ルーム名: ${popularRoomInfo.name}
+ルームID: ${popularRoomId}
+メッセージ数: ${popularRoomCount}
+[/info]`;
+
+    await sendReplyMessage(roomId, message, { accountId, messageId });
+    
+  } catch (error) {
+    console.error("popularコマンド処理でエラー:", error.response?.data || error.message);
+    await sendReplyMessage(roomId, '最も活発なルームの取得に失敗しました。', { accountId, messageId });
+  }
+}
+
+
 // --- サーバー起動時の処理 ---
 const initializeBot = async () => {
   try {
@@ -545,6 +576,12 @@ app.post("/webhook", async (req, res) => {
     return res.status(200).end();
   }
   
+  // 新しいコマンド
+  if (body.trim() === '/popular/') {
+    await handlePopularCommand(roomId, messageId, accountId);
+    return res.status(200).end();
+  }
+
   // 管理者による削除コマンドのチェック
   if (body.includes("/削除/")) {
     const isAdmin = await isUserAdmin(accountId, roomId);
