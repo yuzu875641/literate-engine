@@ -9,13 +9,12 @@ const { JSDOM } = require('jsdom');
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
 const CHATWORK_API_TOKEN1 = process.env.CHATWORK_API_TOKEN1;
 
-// app.js のグローバル変数にアクセスするために、モジュール全体を require します
 const app = require('./app');
 
 // --- API呼び出し、ファイル操作など共通のヘルパー関数 ---
 
 async function sendReplyMessage(roomId, message, { accountId, messageId }) {
-  const replyMessage = `[rp aid=${accountId} to=${roomId}-${messageId}]${message}`;
+  const replyMessage = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]\n${message}`;
   await axios.post(
     `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
     new URLSearchParams({
@@ -144,8 +143,11 @@ async function initializeStats() {
   try {
     const roomlist = await getChatworkRoomlist();
     if (roomlist) {
-      // app.js のグローバル変数に値を設定
-      app.initialRoomStats = roomlist;
+      const roomCounts = {};
+      roomlist.forEach(room => {
+        roomCounts[room.room_id] = 0; // すべての部屋のカウントを0にリセット
+      });
+      app.roomMessageCounts = roomCounts; // app.js のグローバル変数を更新
       app.lastUpdateTime = new Date().toISOString();
       console.log("初期統計データを取得しました。");
       return true;
@@ -161,8 +163,6 @@ async function initializeStats() {
 
 function scheduleDailyReset() {
   const now = new Date();
-  
-  // サーバーのタイムゾーンを日本時間（JST）に合わせる
   const jstMidnight = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
   jstMidnight.setHours(24, 0, 0, 0);
 
