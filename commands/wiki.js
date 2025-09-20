@@ -16,8 +16,14 @@ module.exports = async (roomId, messageId, accountId, keyword) => {
 
     const summary = pages[pageId].extract;
     const title = pages[pageId].title;
+
+    // 正規表現を使ってHTMLタグをすべて削除
+    const plainTextSummary = summary.replace(/<("[^"]*"|'[^']*'|[^>])*>|[\n\r]/g, '');
+
+    // 複数の空白を一つにまとめる
+    const cleanedSummary = plainTextSummary.replace(/\s+/g, ' ').trim();
     
-    let replyText = `【${title}】\n${summary}`;
+    let replyText = `【${title}】\n${cleanedSummary}`;
     
     // 文字数が多すぎる場合は短くする
     if (replyText.length > 500) {
