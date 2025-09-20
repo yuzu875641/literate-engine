@@ -474,15 +474,17 @@ app.get("/", (req, res) => {
 });
 
 app.post("/webhook", async (req, res) => {
-  // Webhookイベントが有効であるか、またfrom_account_idが存在するかをチェック
-  if (!req.body || !req.body.webhook_event || typeof req.body.webhook_event.from_account_id !== 'number') {
-    console.error("Received webhook event with missing or invalid from_account_id:", req.body);
-    return res.status(400).end(); // 無効なリクエストとして終了
+  const event = req.body.webhook_event;
+
+  if (!req.body || !event || typeof event.account_id !== 'number') {
+    console.error("Received webhook event with missing or invalid account_id:", req.body);
+    return res.status(400).end();
   }
-  const accountId = req.body.webhook_event.from_account_id;
-  const roomId = req.body.webhook_event.room_id;
-  const messageId = req.body.webhook_event.message_id;
-  const body = req.body.webhook_event.body;
+  
+  const accountId = event.account_id;
+  const roomId = event.room_id;
+  const messageId = event.message_id;
+  const body = event.body;
 
   if (accountId === botAccountId) {
     console.log("Ignoring message from the bot itself.");
