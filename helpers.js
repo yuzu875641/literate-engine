@@ -9,8 +9,6 @@ const { JSDOM } = require('jsdom');
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
 const CHATWORK_API_TOKEN1 = process.env.CHATWORK_API_TOKEN1;
 
-const app = require('./app');
-
 // --- API呼び出し、ファイル操作など共通のヘルパー関数 ---
 
 async function sendReplyMessage(roomId, message, { accountId, messageId }) {
@@ -121,7 +119,7 @@ async function downloadAndUploadImage(imageUrl, roomId) {
   await fsp.unlink(filePath);
 }
 
-// 統計関連のヘルパー関数
+// 統計関連のヘルパー関数 (Supabaseで処理するため、差分計算関数は不要になります)
 async function getChatworkRoomlist() {
   try {
     const response = await axios.get(
@@ -138,85 +136,6 @@ async function getChatworkRoomlist() {
   }
 }
 
-async function initializeStats() {
-  console.log("初期統計データの取得を開始します。");
-  try {
-    const roomlist = await getChatworkRoomlist();
-    if (roomlist) {
-      const roomCounts = {};
-      roomlist.forEach(room => {
-        roomCounts[room.room_id] = 0; // すべての部屋のカウントを0にリセット
-      });
-      app.roomMessageCounts = roomCounts; // app.js のグローバル変数を更新
-      app.lastUpdateTime = new Date().toISOString();
-      console.log("初期統計データを取得しました。");
-      return true;
-    } else {
-      console.error("初期統計データの取得に失敗しました。");
-      return false;
-    }
-  } catch (error) {
-    console.error("初期統計データの取得に失敗しました:", error.message);
-    return false;
-  }
-}
-
-function scheduleDailyReset() {
-  const now = new Date();
-  const jstMidnight = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
-  jstMidnight.setHours(24, 0, 0, 0);
-
-  const timeToMidnight = jstMidnight.getTime() - now.getTime();
-  
-  console.log(`次のリセットまで、あと ${Math.floor(timeToMidnight / 1000 / 60)}分です。`);
-
-  setTimeout(async () => {
-    console.log("日本時間午前0時になりました。統計データをリセットします。");
-    await initializeStats();
-    scheduleDailyReset();
-  }, timeToMidnight);
-}
-
-function calculateMessageDiffs(initialList, currentList) {
-  if (!initialList || !currentList) {
-    return [];
-  }
-  const diffs = [];
-  currentList.forEach(currentRoom => {
-    const initialRoom = initialList.find(item => item.room_id === currentRoom.room_id);
-    if (initialRoom) {
-      const diff = currentRoom.message_num - initialRoom.message_num;
-      diffs.push({
-        room_id: currentRoom.room_id,
-        name: currentRoom.name,
-        diff,
-      });
-    }
-  });
-  diffs.sort((a, b) => b.diff - a.diff);
-  return diffs;
-}
-
-function calculateFileDiffs(initialList, currentList) {
-  if (!initialList || !currentList) {
-    return [];
-  }
-  const diffs = [];
-  currentList.forEach(currentRoom => {
-    const initialRoom = initialList.find(item => item.room_id === currentRoom.room_id);
-    if (initialRoom) {
-      const diff = currentRoom.file_num - initialRoom.file_num;
-      diffs.push({
-        room_id: currentRoom.room_id,
-        name: currentRoom.name,
-        diff,
-      });
-    }
-  });
-  diffs.sort((a, b) => b.diff - a.diff);
-  return diffs;
-}
-
 module.exports = {
   sendReplyMessage,
   uploadImageToChatwork,
@@ -228,8 +147,4 @@ module.exports = {
   deleteMessage,
   downloadAndUploadImage,
   getChatworkRoomlist,
-  initializeStats,
-  scheduleDailyReset,
-  calculateMessageDiffs,
-  calculateFileDiffs
 };
