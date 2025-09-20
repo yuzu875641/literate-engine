@@ -1,4 +1,3 @@
-// config.js
 const axios = require("axios");
 const { URLSearchParams } = require('url');
 
