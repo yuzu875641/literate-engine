@@ -1,20 +1,25 @@
 const { sendReplyMessage, chatworkApi } = require("../config");
 
-module.exports = async (body, messageId, roomId, accountId) => {
+module.exports = async (body, messageId, roomId, accountId, replyMessageId = null) => {
   try {
-    const matches = body.match(/\/quote\/(\d+)/);
-    if (!matches || matches.length < 2) {
-      await sendReplyMessage(roomId, '引用するメッセージIDを指定してください。', { accountId, messageId });
-      return;
-    }
+    let targetMessageId;
 
-    const targetMessageId = matches[1];
+    if (replyMessageId) {
+        targetMessageId = replyMessageId;
+    } else {
+        const matches = body.match(/\/quote\/(\d+)/);
+        if (!matches || matches.length < 2) {
+          await sendReplyMessage(roomId, '引用するメッセージIDを指定してください。', { accountId, messageId });
+          return;
+        }
+        targetMessageId = matches[1];
+    }
 
     const response = await chatworkApi.get(`/rooms/${roomId}/messages/${targetMessageId}`);
     const message = response.data;
     const bodyText = message.body;
 
-    const quoteMessage = `[qt][qtmeta aid=10617115 time=${message.send_time}]${bodyText}[/qt]`;
+    const quoteMessage = `[qt][qtmeta aid=${message.account_id} time=${message.send_time}]${bodyText}[/qt]`;
 
     await sendReplyMessage(roomId, quoteMessage, { accountId, messageId });
 
