@@ -33,6 +33,7 @@ const CHATWORK_EMOJIS = [
 
 // --- ヘルパー関数 ---
 
+
 // メッセージを送信する共通関数
 async function sendChatwork(body, roomId) {
   try {
@@ -220,6 +221,40 @@ async function RandomMember(messageId, roomId, accountId) {
   }
 }
 
+// メッセージを引用するコマンド
+async function handleQuoteCommand(body, messageId, roomId, accountId) {
+  try {
+    const matches = body.match(/\/quote\/(\d+)/);
+    if (!matches || matches.length < 2) {
+      await sendReplyMessage(roomId, '引用するメッセージIDを指定してください。', { accountId, messageId });
+      return;
+    }
+
+    const targetMessageId = matches[1];
+
+    // Chatwork APIからメッセージ情報を取得
+    const response = await chatworkApi.get(`/rooms/${roomId}/messages/${targetMessageId}`);
+    const message = response.data;
+    const bodyText = message.body;
+
+    // 引用文を作成
+    const quoteMessage = `[qt][piconname:${message.account_id}]さん
+${bodyText}[/qt]`;
+
+    // 引用メッセージを送信
+    await sendReplyMessage(roomId, quoteMessage, { accountId, messageId });
+
+  } catch (error) {
+    console.error('引用コマンドエラー:', error.response ? error.response.data : error.message);
+    if (error.response?.status === 404) {
+      await sendReplyMessage(roomId, '指定されたメッセージIDが見つかりませんでした。', { accountId, messageId });
+    } else if (error.response?.status === 403) {
+      await sendReplyMessage(roomId, 'このルームのメッセージを取得する権限がありません。', { accountId, messageId });
+    } else {
+      await sendReplyMessage(roomId, '引用中にエラーが発生しました。', { accountId, messageId });
+    }
+  }
+}
 // サイコロ関数
 async function saikoro(body, messageId, roomId, accountId) {
   try {
@@ -568,7 +603,12 @@ app.post("/webhook", async (req, res) => {
     await mememe(body, messageId, roomId, accountId);
     return res.status(200).end();
   }
-
+  
+　if (body.trim().startsWith('/quote/')) {
+    await handleQuoteCommand(body, messageId, roomId, accountId);
+    return res.status(200).end();
+　}
+  
   if (body.startsWith("/QR/")) {
     await sendQR(body, messageId, roomId, accountId);
     return res.status(200).end();
