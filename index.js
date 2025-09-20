@@ -16,6 +16,7 @@ const handleQuoteCommand = require("./commands/quote");
 const handleReadCommand = require("./commands/read");
 const handleRandomCommand = require("./commands/random");
 const handleNowCommand = require("./commands/now");
+const handleDeleteCommand = require("./commands/delete"); 
 
 const app = express();
 app.use(express.json());
@@ -156,6 +157,10 @@ app.post("/webhook", async (req, res) => {
       if (body.includes("/kick/")) {
         await handleAdminCommand(targetAccountId, 'readonly', roomId, messageId, accountId, botAccountId);
         return res.status(200).end();
+      }
+      if (body.includes("/削除/")) {
+                await handleDeleteCommand(roomId, targetMessageId, messageId, accountId);
+                return res.status(200).end();
       }
     }
   }
