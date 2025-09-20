@@ -282,6 +282,12 @@ async function mememe(body, messageId, roomId, accountId) {
   
   const targetAccountId = parseInt(matches[1]);
   const currentTime = Date.now();
+  
+  // ボット自身のIDを検索した場合に処理を停止
+  if (targetAccountId === botAccountId) {
+    await sendReplyMessage(roomId, 'ボット自身の情報は検索できません。', { accountId, messageId });
+    return;
+  }
 
   if (getOk !== null && currentTime - getOk < 300000) {
     await sendReplyMessage(roomId, 'このコマンドは短い期間に連続して使用できません。', { accountId, messageId });
