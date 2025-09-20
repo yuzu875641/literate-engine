@@ -236,6 +236,12 @@ async function saikoro(body, messageId, roomId, accountId) {
       await sendReplyMessage(roomId, 'ダイスの数と面の数は1以上を指定してください。', { accountId, messageId });
       return;
     }
+    
+    // 最大数と最小数の制限を追加
+    if (saikoro > 50 || men > 1000) {
+      await sendReplyMessage(roomId, 'ダイスの数は50個まで、面の数は1000面まででお願いします。', { accountId, messageId });
+      return;
+    }
 
     const numbers = [];
     for (let s = 0; s < saikoro; s++) {
@@ -244,12 +250,8 @@ async function saikoro(body, messageId, roomId, accountId) {
     
     const sum = numbers.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
 
-    let resultMessage;
-    if (saikoro === 1) {
-      resultMessage = `${numbers[0]}`;
-    } else {
-      resultMessage = `${numbers.join(' + ')} = ${sum}`;
-    }
+    // 出目のリストと合計値を別々に表示
+    const resultMessage = `${numbers.join(', ')} 合計値: ${sum}`;
 
     await sendReplyMessage(roomId, resultMessage, { accountId, messageId });
 
