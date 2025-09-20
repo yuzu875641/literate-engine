@@ -128,11 +128,6 @@ app.post("/webhook", async (req, res) => {
     return res.status(200).end();
   }
 
-  if (body.trim().startsWith('/quote/')) {
-    await handleQuoteCommand(body, messageId, roomId, accountId);
-    return res.status(200).end();
-  }
-
   if (body.trim() === '/random/') {
     await handleRandomCommand(messageId, roomId, accountId);
     return res.status(200).end();
@@ -149,6 +144,12 @@ app.post("/webhook", async (req, res) => {
     const targetAccountId = parseInt(replyMatches[1]);
     const replyMessageId = replyMatches[3];
 
+    // 新しい /quote/ コマンドの処理
+    if (body.includes("/quote/")) {
+      await handleQuoteCommand(body, messageId, roomId, accountId, replyMessageId);
+      return res.status(200).end();
+    }
+
     const isAdmin = await isUserAdmin(accountId, roomId);
     if (isAdmin) {
       if (body.includes("/admin/")) {
@@ -164,6 +165,12 @@ app.post("/webhook", async (req, res) => {
         return res.status(200).end();
       }
     }
+  }
+
+  // /quote/ コマンドが返信を伴わない場合の処理 (既存のコード)
+  if (body.trim().startsWith('/quote/')) {
+    await handleQuoteCommand(body, messageId, roomId, accountId);
+    return res.status(200).end();
   }
 
   // 不正利用フィルター
