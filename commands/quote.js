@@ -14,7 +14,7 @@ module.exports = async (body, messageId, roomId, accountId) => {
     const message = response.data;
     const bodyText = message.body;
 
-    const quoteMessage = `[qt][qtmeta aid=${message.account_id} time=${message.send_time}]${bodyText}[/qt]`;
+    const quoteMessage = `[qt][qtmeta aid=10617115 time=${message.send_time}]${bodyText}[/qt]`;
 
     await sendReplyMessage(roomId, quoteMessage, { accountId, messageId });
 
