@@ -9,8 +9,10 @@ const {
   deleteMessage,
   downloadAndUploadImage,
   getChatworkRoomlist,
-  initializeStats // 新たに追加
+  initializeStats // initializeStatsは使用しないので削除してもOK
 } = require('./helpers');
+const { saving, topNeo, topFile } = require('./supabase_helpers'); // Supabase用の関数をインポート
+
 const axios = require('axios');
 const { JSDOM } = require('jsdom');
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
@@ -31,8 +33,6 @@ async function handleCommands(data) {
     userWarningCount,
     member_backup,
     urlCheckStatus,
-    roomMessageCounts, // 新しいカウンター
-    lastUpdateTime,
     NO_URL_CHECK_ROOMS
   } = data;
   const replyRegex = /\[rp aid=(\d+) to=(\d+)-(\d+)]/;
@@ -56,19 +56,24 @@ async function handleCommands(data) {
     console.error("メンバーリスト取得エラー:", error.response?.data || error.message);
   }
   
-  // --- /startコマンド: カウントをリセット ---
+  // --- /startコマンド: 統計データをSupabaseに保存 ---
   if (body.trim() === '/start') {
-    await sendReplyMessage(roomId, 'メッセージ数のカウントを再開します。', { accountId, messageId });
-    try {
-      await initializeStats(); // helpers.js の初期化関数を呼び出す
-      await sendReplyMessage(roomId, 'メッセージカウントの準備が完了しました。', { accountId, messageId });
-      return;
-    } catch (error) {
-      await sendReplyMessage(roomId, 'メッセージカウントの開始に失敗しました。', { accountId, messageId });
-      return;
-    }
+    await saving(body, null, messageId, roomId, accountId);
+    return;
+  }
+  
+  // --- /topsコマンドに反応 (Supabaseを利用) ---
+  if (body.trim() === '/tops') {
+    await topNeo(body, null, messageId, roomId, accountId);
+    return;
   }
 
+  // --- /filetopsコマンドに反応 (Supabaseを利用) ---
+  if (body.trim() === '/filetops') {
+    await topFile(body, null, messageId, roomId, accountId);
+    return;
+  }
+  
   // --- 一般ユーザー向けコマンド ---
   if (body.startsWith('/QR ')) {
     const textToEncode = body.substring(4);
@@ -100,6 +105,7 @@ async function handleCommands(data) {
       return;
     }
   }
+
   if (body === 'おみくじ') {
     try {
       const result = drawFortune();
@@ -275,72 +281,6 @@ async function handleCommands(data) {
     }
   }
   
-  // /tops コマンドに反応
-  if (body.trim() === '/tops') {
-    if (Object.keys(roomMessageCounts).length === 0) {
-      await sendReplyMessage(roomId, 'ごめんね、まだ統計データが準備できてないみたい。少し待ってからもう一度試してみて。', { accountId, messageId });
-      return;
-    }
-    
-    try {
-      const sortedRooms = Object.keys(roomMessageCounts)
-        .map(id => ({ room_id: parseInt(id), count: roomMessageCounts[id] }))
-        .sort((a, b) => b.count - a.count);
-
-      const top8Diffs = sortedRooms.slice(0, 8);
-      
-      const allRooms = (await getChatworkRoomlist()) || [];
-      
-      let chatworkMessage = `メッセージ数ランキングだよ！(cracker)[info][title]メッセージ数ランキング[/title]\n`;
-      top8Diffs.forEach((item, index) => {
-        const roomInfo = allRooms.find(r => r.room_id === item.room_id);
-        const roomName = roomInfo ? roomInfo.name : `ルームID: ${item.room_id}`;
-        chatworkMessage += `[download:1681682877]${index + 1}位[/download] ${roomName}\n(ID: ${item.room_id}) - ${item.count}コメ。[hr]`;
-      });
-      chatworkMessage += `[hr]統計開始: ${new Date(lastUpdateTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}[/info]`;
-      
-      await sendReplyMessage(roomId, chatworkMessage, { accountId, messageId });
-      return;
-    } catch (error) {
-      console.error("メッセージ数ランキング取得エラー:", error.response?.data || error.message);
-      await sendReplyMessage(roomId, 'ランキングの取得中にエラーが発生しました。', { accountId, messageId });
-      return;
-    }
-  }
-
-  // /filetops コマンドに反応
-  if (body.trim() === '/filetops') {
-    if (initialRoomStats.length === 0) {
-      await sendReplyMessage(roomId, 'ごめんね、まだ統計データが準備できてないみたい。少し待ってからもう一度試してみて。', { accountId, messageId });
-      return;
-    }
-    
-    try {
-      const currentRoomList = await getChatworkRoomlist();
-      if (!currentRoomList) {
-        await sendReplyMessage(roomId, '現在のルームリストの取得に失敗しました。', { accountId, messageId });
-        return;
-      }
-      
-      const fileDiffs = calculateFileDiffs(initialRoomStats, currentRoomList);
-      const top8Diffs = fileDiffs.slice(0, 8);
-      
-      let chatworkMessage = `ファイル数ランキングだよ！(cracker)[info][title]ファイル数ランキング[/title]\n`;
-      top8Diffs.forEach((item, index) => {
-        chatworkMessage += `[download:1681682877]${index + 1}位[/download] ${item.name}\n(ID: ${item.room_id}) - ${item.diff}個。[hr]`;
-      });
-      chatworkMessage += `[hr]統計開始: ${new Date(lastUpdateTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}[/info]`;
-      
-      await sendReplyMessage(roomId, chatworkMessage, { accountId, messageId });
-      return;
-    } catch (error) {
-      console.error("ファイル数ランキング取得エラー:", error.response?.data || error.message);
-      await sendReplyMessage(roomId, 'ランキングの取得中にエラーが発生しました。', { accountId, messageId });
-      return;
-    }
-  }
-  
-  // --- 管理者専用コマンド ---
   if (body.trim().startsWith('/invalid')) {
     if (!senderIsAdmin) {
       await sendReplyMessage(roomId, 'このコマンドは管理者のみ使用できます。', { accountId, messageId });
