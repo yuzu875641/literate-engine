@@ -9,8 +9,6 @@ const {
   deleteMessage,
   downloadAndUploadImage,
   getChatworkRoomlist,
-  calculateMessageDiffs,
-  calculateFileDiffs,
   initializeStats // 新たに追加
 } = require('./helpers');
 const axios = require('axios');
@@ -33,7 +31,7 @@ async function handleCommands(data) {
     userWarningCount,
     member_backup,
     urlCheckStatus,
-    initialRoomStats,
+    roomMessageCounts, // 新しいカウンター
     lastUpdateTime,
     NO_URL_CHECK_ROOMS
   } = data;
@@ -58,15 +56,15 @@ async function handleCommands(data) {
     console.error("メンバーリスト取得エラー:", error.response?.data || error.message);
   }
   
-  // --- /startコマンドを追加 ---
+  // --- /startコマンド: カウントをリセット ---
   if (body.trim() === '/start') {
-    await sendReplyMessage(roomId, '強制的に統計データを再取得します。', { accountId, messageId });
+    await sendReplyMessage(roomId, 'メッセージ数のカウントを再開します。', { accountId, messageId });
     try {
-      await initializeStats();
-      await sendReplyMessage(roomId, '統計データの取得が完了しました。', { accountId, messageId });
+      await initializeStats(); // helpers.js の初期化関数を呼び出す
+      await sendReplyMessage(roomId, 'メッセージカウントの準備が完了しました。', { accountId, messageId });
       return;
     } catch (error) {
-      await sendReplyMessage(roomId, '統計データの取得に失敗しました。', { accountId, messageId });
+      await sendReplyMessage(roomId, 'メッセージカウントの開始に失敗しました。', { accountId, messageId });
       return;
     }
   }
@@ -121,8 +119,6 @@ async function handleCommands(data) {
       await sendReplyMessage(roomId, `画像だよ！`, { accountId, messageId });
       return;
     } catch (error) {
-      console.error("画像送信処理でエラーが発生:", error);
-      return;
     }
   }
   
@@ -278,27 +274,28 @@ async function handleCommands(data) {
       return;
     }
   }
-
+  
   // /tops コマンドに反応
   if (body.trim() === '/tops') {
-    if (initialRoomStats.length === 0) {
+    if (Object.keys(roomMessageCounts).length === 0) {
       await sendReplyMessage(roomId, 'ごめんね、まだ統計データが準備できてないみたい。少し待ってからもう一度試してみて。', { accountId, messageId });
       return;
     }
     
     try {
-      const currentRoomList = await getChatworkRoomlist();
-      if (!currentRoomList) {
-        await sendReplyMessage(roomId, '現在のルームリストの取得に失敗しました。', { accountId, messageId });
-        return;
-      }
+      const sortedRooms = Object.keys(roomMessageCounts)
+        .map(id => ({ room_id: parseInt(id), count: roomMessageCounts[id] }))
+        .sort((a, b) => b.count - a.count);
+
+      const top8Diffs = sortedRooms.slice(0, 8);
       
-      const messageDiffs = calculateMessageDiffs(initialRoomStats, currentRoomList);
-      const top8Diffs = messageDiffs.slice(0, 8);
+      const allRooms = (await getChatworkRoomlist()) || [];
       
       let chatworkMessage = `メッセージ数ランキングだよ！(cracker)[info][title]メッセージ数ランキング[/title]\n`;
       top8Diffs.forEach((item, index) => {
-        chatworkMessage += `[download:1681682877]${index + 1}位[/download] ${item.name}\n(ID: ${item.room_id}) - ${item.diff}コメ。[hr]`;
+        const roomInfo = allRooms.find(r => r.room_id === item.room_id);
+        const roomName = roomInfo ? roomInfo.name : `ルームID: ${item.room_id}`;
+        chatworkMessage += `[download:1681682877]${index + 1}位[/download] ${roomName}\n(ID: ${item.room_id}) - ${item.count}コメ。[hr]`;
       });
       chatworkMessage += `[hr]統計開始: ${new Date(lastUpdateTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}[/info]`;
       
