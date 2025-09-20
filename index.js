@@ -16,7 +16,7 @@ const handleQuoteCommand = require("./commands/quote");
 const handleReadCommand = require("./commands/read");
 const handleRandomCommand = require("./commands/random");
 const handleNowCommand = require("./commands/now");
-const handleDeleteCommand = require("./commands/delete"); 
+const handleDeleteCommand = require("./commands/delete");
 
 const app = express();
 app.use(express.json());
@@ -144,9 +144,10 @@ app.post("/webhook", async (req, res) => {
   }
 
   // 管理者コマンドのチェック
-  const replyMatches = body.match(/\[rp aid=(\d+)/);
+  const replyMatches = body.match(/\[rp aid=(\d+) to=(\d+)-(\d+)/);
   if (replyMatches) {
     const targetAccountId = parseInt(replyMatches[1]);
+    const replyMessageId = replyMatches[3];
 
     const isAdmin = await isUserAdmin(accountId, roomId);
     if (isAdmin) {
@@ -159,8 +160,8 @@ app.post("/webhook", async (req, res) => {
         return res.status(200).end();
       }
       if (body.includes("/削除/")) {
-                await handleDeleteCommand(roomId, targetMessageId, messageId, accountId);
-                return res.status(200).end();
+        await handleDeleteCommand(roomId, replyMessageId, messageId, accountId);
+        return res.status(200).end();
       }
     }
   }
