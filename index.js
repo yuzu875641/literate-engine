@@ -17,7 +17,7 @@ const handleReadCommand = require("./commands/read");
 const handleRandomCommand = require("./commands/random");
 const handleNowCommand = require("./commands/now");
 const handleDeleteCommand = require("./commands/delete");
-const handleMiaqCommand = require("./commands/miq");
+
 const app = express();
 app.use(express.json());
 
@@ -147,11 +147,6 @@ app.post("/webhook", async (req, res) => {
     // 新しい /quote/ コマンドの処理
     if (body.includes("/quote/")) {
       await handleQuoteCommand(body, messageId, roomId, accountId, replyMessageId);
-      return res.status(200).end();
-    }
-
-    if (body.includes("/miaq/")) {
-      await handleMiaqCommand(roomId, replyMessageId, messageId, accountId);
       return res.status(200).end();
     }
 
