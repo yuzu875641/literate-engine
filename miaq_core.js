@@ -1,7 +1,7 @@
 const sharp = require('sharp');
 const path = require('path');
 const axios = require('axios');
-const { MiQ } = require('./miq.js');
+const { MiQ } = require('./commands/miq.js');
 
 const quote = new MiQ();
 
