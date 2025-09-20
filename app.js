@@ -2,10 +2,12 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
+// commands.js から handleCommands をインポート
 const { handleCommands } = require('./commands');
-const { initializeStats, scheduleDailyReset } = require('./helpers');
 
-// グローバル変数
+// 新しい Supabase 用のヘルパー関数群をインポート
+const { save } = require('./supabase_helpers');
+
 const userWarningCount = {};
 const member_backup = {};
 const urlCheckStatus = {};
@@ -13,16 +15,11 @@ const NO_URL_CHECK_ROOMS = [
   395403065
 ];
 
-// 新しいメッセージカウンター
-let roomMessageCounts = {};
-let lastUpdateTime = null;
-
-// ボット起動時に処理を開始
+// 起動時に統計データをSupabaseに保存する処理
+// これが新しい「リセット」の開始点になります
+// 毎日午前0時に実行されるように、cronなどでこの処理を呼び出すことを推奨
 (async () => {
-  const result = await initializeStats();
-  if (result) {
-    scheduleDailyReset();
-  }
+  await save();
 })();
 
 // ウェブフックのエンドポイント
@@ -35,14 +32,6 @@ app.post('/webhook', async (req, res) => {
 
   const { account_id: accountId, body, room_id: roomId, message_id: messageId } = webhookEvent;
 
-  // Webhookを受け取った部屋のメッセージカウントを+1
-  if (roomMessageCounts[roomId] !== undefined) {
-    roomMessageCounts[roomId] += 1;
-  } else {
-    // もし存在しなければ、初期値として1を設定
-    roomMessageCounts[roomId] = 1;
-  }
-
   await handleCommands({
     accountId,
     body,
@@ -51,15 +40,12 @@ app.post('/webhook', async (req, res) => {
     userWarningCount,
     member_backup,
     urlCheckStatus,
-    roomMessageCounts, // リアルタイムカウンターを渡す
-    lastUpdateTime,
     NO_URL_CHECK_ROOMS
   });
 
   return res.sendStatus(200);
 });
 
-// サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
