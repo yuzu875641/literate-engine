@@ -22,6 +22,7 @@ const handleWikiCommand = require("./commands/wiki");
 const handleScratchCommand = require("./commands/scratch");
 const handleScratchUnreadCommand = require("./commands/scratch_unread");
 const handleAiCommand = require("./commands/ai");
+const handleSayCommand = require("./commands/say");
 
 
 const app = express();
@@ -200,6 +201,21 @@ app.post("/webhook", async (req, res) => {
       if (body.includes("/admin/")) {
         await handleAdminCommand(targetAccountId, 'admin', roomId, messageId, accountId, botAccountId);
         return res.status(200).end();
+      }
+      if (body.startsWith("/say/")) {
+    const isAdmin = await isUserAdmin(accountId, roomId);
+    if (!isAdmin) {
+      await sendReplyMessage(roomId, 'このコマンドは管理者のみが使用できます。', { accountId, messageId });
+      return res.status(200).end();
+    }
+    
+    const textToSay = body.replace('/say/', '').trim();
+    if (textToSay) {
+      await handleSayCommand(roomId, messageId, accountId, textToSay);
+    } else {
+      await sendReplyMessage(roomId, 'Botに言わせたい言葉を入力してください。', { accountId, messageId });
+    }
+    return res.status(200).end();
       }
       if (body.includes("/kick/")) {
         await handleAdminCommand(targetAccountId, 'readonly', roomId, messageId, accountId, botAccountId);
