@@ -23,7 +23,8 @@ const handleScratchCommand = require("./commands/scratch");
 const handleScratchUnreadCommand = require("./commands/scratch_unread");
 const handleAllMemberCommand = require("./commands/allmember");
 const handleMiaqCommand = require("./commands/miaq"); // 新しいモジュールをインポート
-const handleAllMemberCommand = require("./commands/ai");
+const handleAiCommand = require("./commands/ai");
+
 
 
 const app = express();
