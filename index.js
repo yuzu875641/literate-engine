@@ -22,6 +22,7 @@ const handleWikiCommand = require("./commands/wiki");
 const handleScratchCommand = require("./commands/scratch");
 const handleScratchUnreadCommand = require("./commands/scratch_unread");
 const handleAllMemberCommand = require("./commands/allmember");
+const handleMiaqCommand = require("./commands/miaq");
 
 
 const app = express();
@@ -184,6 +185,21 @@ app.post("/webhook", async (req, res) => {
   if (body.trim() === '/now/') {
     await handleNowCommand(messageId, roomId, accountId);
     return res.status(200).end();
+  }
+  if (body.startsWith("/miaq/")) {
+  const messageUrl = body.replace('/miaq/', '').trim();
+  // 新しい正規表現でルームIDとメッセージIDを抽出
+  const urlPattern = /^https:\/\/www\.chatwork\.com\/\#\!rid(\d+)-(\d+)$/;
+  const matches = messageUrl.match(urlPattern);
+
+  if (matches) {
+    const roomId = matches[1];
+    const messageIdToQuote = matches[2]; // ここが新しいメッセージID
+    await handleMiaqCommand(roomId, messageIdToQuote, messageId, accountId);
+  } else {
+    await sendReplyMessage(roomId, 'メッセージのURLが正しくありません。', { accountId, messageId });
+  }
+  return res.status(200).end();
   }
 
   // 管理者コマンドのチェック
