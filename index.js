@@ -21,8 +21,7 @@ const handleTestCommand = require("./commands/test");
 const handleWikiCommand = require("./commands/wiki");
 const handleScratchCommand = require("./commands/scratch");
 const handleScratchUnreadCommand = require("./commands/scratch_unread");
-const handleAiCommand = require("./commands/ai");
-const handleSayCommand = require("./commands/say");
+const handleAllMemberCommand = require("./commands/allmember");
 
 
 const app = express();
@@ -178,7 +177,10 @@ app.post("/webhook", async (req, res) => {
     await handleRandomCommand(messageId, roomId, accountId);
     return res.status(200).end();
   }
-
+　if (body.trim() === "/allmember/") {
+    await handleAllMemberCommand(roomId, messageId, accountId);
+    return res.status(200).end();
+ }
   if (body.trim() === '/now/') {
     await handleNowCommand(messageId, roomId, accountId);
     return res.status(200).end();
