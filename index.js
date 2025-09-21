@@ -21,6 +21,7 @@ const handleTestCommand = require("./commands/test");
 const handleWikiCommand = require("./commands/wiki");
 const handleScratchCommand = require("./commands/scratch");
 const handleScratchUnreadCommand = require("./commands/scratch_unread");
+const handleAiCommand = require("./commands/ai");
 
 
 const app = express();
@@ -102,7 +103,15 @@ app.post("/webhook", async (req, res) => {
     await handleInfoCommand(roomId, messageId, accountId);
     return res.status(200).end();
   }
-
+　if (body.startsWith("/ai/")) {
+    const prompt = body.replace('/ai/', '').trim();
+    if (prompt) {
+      await handleAiCommand(roomId, messageId, accountId, prompt);
+    } else {
+      await sendReplyMessage(roomId, 'AIへのプロンプトを入力してください。例: /ai/こんにちは', { accountId, messageId });
+    }
+    return res.status(200).end();
+　　 }
   if (body.trim() === '/既読/') {
     await handleReadCommand(roomId, messageId, accountId);
     return res.status(200).end();
