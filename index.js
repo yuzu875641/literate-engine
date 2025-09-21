@@ -19,6 +19,8 @@ const handleNowCommand = require("./commands/now");
 const handleDeleteCommand = require("./commands/delete");
 const handleTestCommand = require("./commands/test");
 const handleWikiCommand = require("./commands/wiki");
+const handleScratchCommand = require("./commands/scratch");
+const handleScratchUnreadCommand = require("./commands/scratch_unread");
 
 
 const app = express();
@@ -110,7 +112,24 @@ app.post("/webhook", async (req, res) => {
     await handleTestCommand(roomId, messageId, accountId, startTime);
     return res.status(200).end();
   }
-
+  if (body.startsWith("/scratch/")) {
+    const username = body.replace('/scratch/', '').trim();
+    if (username) {
+      await handleScratchCommand(roomId, messageId, accountId, username);
+    } else {
+      await sendReplyMessage(roomId, 'ユーザー名を入力してください。例: /scratch/scratchcat', { accountId, messageId });
+    }
+    return res.status(200).end();
+  }
+  if (body.startsWith("/scratch/unread/")) {
+    const username = body.replace('/scratch/unread/', '').trim();
+    if (username) {
+      await handleScratchUnreadCommand(roomId, messageId, accountId, username);
+    } else {
+      await sendReplyMessage(roomId, 'ユーザー名を入力してください。例: /scratch/unread/scratchcat', { accountId, messageId });
+    }
+    return res.status(200).end();
+  }
   if (body.startsWith("/wiki/")) {
     const keyword = body.replace('/wiki/', '').trim();
     if (keyword) {
@@ -120,7 +139,6 @@ app.post("/webhook", async (req, res) => {
     }
     return res.status(200).end();
   }
-
   if (body.trim().startsWith('/dice/')) {
     await handleDiceCommand(body, messageId, roomId, accountId);
     return res.status(200).end();
