@@ -4,7 +4,7 @@ module.exports = async (body, messageId, roomId, accountId) => {
   try {
     const match = body.match(/\/dice\/(\d+)d(\d+)/);
     if (!match) {
-      await sendReplyMessage(roomId, 'ダイスの数と面の数を指定してください。例：/dice/2d6', { accountId, messageId });
+      await sendReplyMessage(roomId, 'ダイスの数と面の数を指定してください。', { accountId, messageId });
       return;
     }
 
@@ -28,7 +28,7 @@ module.exports = async (body, messageId, roomId, accountId) => {
     
     const sum = numbers.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
 
-    const resultMessage = `${numbers.join(', ')}\n合計値${sum}`;
+    const resultMessage = `${numbers.join(', ')}　合計値${sum}`;
 
     await sendReplyMessage(roomId, resultMessage, { accountId, messageId });
 
