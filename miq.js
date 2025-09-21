@@ -47,7 +47,7 @@ class MiQ {
       throw new Error('Text is required');
     }
 
-    const API_URL = "https://api.voids.top/fakequotebeta";
+    const API_URL = "https://miq-yol8.onrender.com/";
 
     try {
       const response = await axios.post(API_URL, this.format, { responseType: 'arraybuffer' });
