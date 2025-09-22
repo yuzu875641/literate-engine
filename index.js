@@ -23,7 +23,6 @@ const handleScratchCommand = require("./commands/scratch");
 const handleScratchUnreadCommand = require("./commands/scratch_unread");
 const handleAllMemberCommand = require("./commands/allmember");
 const handleAiCommand = require("./commands/ai");
-const handleMiaqCommand = require("./commands/miaq");
 
 
 
@@ -188,15 +187,7 @@ app.post("/webhook", async (req, res) => {
     await handleNowCommand(messageId, roomId, accountId);
     return res.status(200).end();
   }
-  if (body.startsWith("/miaq/")) {
-    const link = body.replace('/miaq/', '').trim();
-    if (link) {
-      await handleMiaqCommand(roomId, messageId, accountId, link);
-    } else {
-      await sendReplyMessage(roomId, 'メッセージリンクを入力してください。', { accountId, messageId });
-    }
-    return res.status(200).end();
-  }
+  
   
   
   // 管理者コマンドのチェック
