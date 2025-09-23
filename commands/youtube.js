@@ -4,7 +4,7 @@ const { sendReplyMessage } = require("../config");
 async function handleYoutubeCommand(roomId, messageId, accountId, body) {
   try {
     const youtubeUrlMatch = body.match(/\/youtube\/(https:\/\/(?:www\.)?youtube\.com\/watch\?v=[a-zA-Z0-9_-]+|https:\/\/youtu\.be\/[a-zA-Z0-9_-]+)/);
-    
+
     if (!youtubeUrlMatch) {
       await sendReplyMessage(roomId, 'YouTube動画のURLが見つかりませんでした。', { accountId, messageId });
       return;
@@ -13,7 +13,7 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
     const youtubeUrl = youtubeUrlMatch[1];
     const encodedUrl = encodeURIComponent(youtubeUrl);
     const apiUrl = `https://vkrdownloader.xyz/server/?api_key=vkrdownloader&vkr=${encodedUrl}`;
-    
+
     const response = await axios.get(apiUrl);
     const data = response.data.data;
 
@@ -22,22 +22,19 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
       return;
     }
 
-    // レスポンスからタイトルを取得
     const title = data.title;
 
-    // downloads配列をループして、すべての有効なURLとフォーマットIDを収集
     const allDownloads = data.downloads
-      .filter(dl => dl.url) // URLがあるもののみをフィルタリング
+      .filter(dl => dl.url)
       .map(dl => `・${dl.format_id}\n[code]${dl.url}[/code]`)
-      .join('\n');
+      .join('\n\n');
 
     if (!allDownloads) {
-      await sendReplyMessage(roomId, '指定された動画の有効なダウンロードURLが見つかりませんでした。', { accountId, messageId });
+      await sendReplyMessage(roomId, '指定された動画の有効なダウンロードURLが一つも見つかりませんでした。', { accountId, messageId });
       return;
     }
 
-    // すべてのURLをまとめたメッセージを送信
-    const formattedMessage = `[info][title]${title}[/title]${allDownloads}[/info]`;
+    const formattedMessage = `[info][title]${title}[/title]\n${allDownloads}[/info]`;
 
     await sendReplyMessage(roomId, formattedMessage, { accountId, messageId });
 
