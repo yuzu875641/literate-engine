@@ -20,6 +20,24 @@ async function sendChatwork(body, roomId) {
   }
 }
 
+async function uploadImage(roomId, imagePath, message) {
+  try {
+    const formData = new URLSearchParams();
+    formData.append('file', fs.createReadStream(imagePath));
+    formData.append('message', message);
+
+    await chatworkApi.post(`/rooms/${roomId}/files`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    console.log(`画像を部屋 ${roomId} にアップロードしました。`);
+  } catch (error) {
+    console.error('画像アップロードエラー:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
 // 返信メッセージを送信する共通関数
 async function sendReplyMessage(roomId, message, { accountId, messageId }) {
   const replyBody = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n${message}`;
