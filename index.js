@@ -74,7 +74,7 @@ const initializeBot = async () => {
     botAccountId = meResponse.data.account_id;
     console.log(`Bot's account ID: ${botAccountId}`);
   } catch (error) {
-    console.error('Failed to get bot account ID:', error.response ? error.response.data : error.message);
+    console.error('botの、アカウントIDを取得したよ　account　id:', error.response ? error.response.data : error.message);
     process.exit(1);
   }
 }
@@ -158,7 +158,6 @@ cron.schedule('0 0 * * *', async () => {
 }, {
     timezone: "Asia/Tokyo"
 });
-
 async function handleShotgetCommand(roomId, messageId, accountId, url) {
     const screenshotApiUrl = `https://api.apiflash.com/v1/urltoimage?access_key=fc2a75ec11e24c44b209426e72e802a7&url=${encodeURIComponent(url)}&format=jpeg&full_page=true`;
     const tempImageDir = path.join(__dirname, 'temp');
@@ -432,6 +431,6 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`サーバーが起動したよ port ${PORT}`);
   initializeBot();
 });
