@@ -56,9 +56,6 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
 
     const fileId = uploadResponse.data.file_id;
     
-    // 6. アップロードしたファイルを添付してメッセージを送信
-    await sendReplyMessage(roomId, `[download:${fileId}]miaq[/download]`, { accountId, messageId });
-
   } catch (error) {
     console.error('MIQコマンドエラー:', error.response ? error.response.data : error.message);
     await sendReplyMessage(roomId, '画像の生成または送信に失敗しました。URLが正しいか、またはメッセージが削除されていないか確認してください。', { accountId, messageId });
