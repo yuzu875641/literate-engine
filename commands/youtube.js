@@ -22,11 +22,11 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
       return;
     }
 
-    // 1. レスポンスからタイトルと最初のダウンロードURLを取得
+    // レスポンスからタイトルと最初のダウンロードURLを取得
     const title = data.title;
     const downloadUrl = data.downloads[0].url;
 
-    // 2. 指定されたフォーマットでメッセージを送信
+    // 指定されたフォーマットでメッセージを送信
     const formattedMessage = `[info][title]${title}[/title][code]${downloadUrl}[/code][/info]`;
 
     await sendReplyMessage(roomId, formattedMessage, { accountId, messageId });
