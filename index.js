@@ -23,7 +23,7 @@ const handleScratchCommand = require("./commands/scratch");
 const handleScratchUnreadCommand = require("./commands/scratch_unread");
 const handleAllMemberCommand = require("./commands/allmember");
 const handleAiCommand = require("./commands/ai");
-
+const handleMiaqCommand = require("./commands/miaq"); 
 
 
 const app = express();
