@@ -25,16 +25,19 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
     // レスポンスからタイトルを取得
     const title = data.title;
 
-    // 最初に有効なURLを持つ要素を検索
-    const validDownload = data.downloads.find(dl => dl.url);
-    if (!validDownload) {
+    // downloads配列をループして、すべての有効なURLとフォーマットIDを収集
+    const allDownloads = data.downloads
+      .filter(dl => dl.url) // URLがあるもののみをフィルタリング
+      .map(dl => `・${dl.format_id}\n[code]${dl.url}[/code]`)
+      .join('\n');
+
+    if (!allDownloads) {
       await sendReplyMessage(roomId, '指定された動画の有効なダウンロードURLが見つかりませんでした。', { accountId, messageId });
       return;
     }
-    const downloadUrl = validDownload.url;
 
-    // 指定されたフォーマットでメッセージを送信
-    const formattedMessage = `[info][title]${title}[/title][code]${downloadUrl}[/code][/info]`;
+    // すべてのURLをまとめたメッセージを送信
+    const formattedMessage = `[info][title]${title}[/title]${allDownloads}[/info]`;
 
     await sendReplyMessage(roomId, formattedMessage, { accountId, messageId });
 
