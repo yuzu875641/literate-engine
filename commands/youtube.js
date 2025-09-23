@@ -20,10 +20,18 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
 
     const youtubeUrl = youtubeUrlMatch[1];
     const encodedUrl = encodeURIComponent(youtubeUrl);
-    const apiUrl = `https://vkrdownloader.xyz/server/?api_key=vkrdownloader&vkr=${encodedUrl}`;
-    
-    // APIレスポンスの取得
-    const response = await axios.get(apiUrl);
+
+    // 1. APIからのレスポンス取得
+    let response;
+    try {
+      const apiUrl = `https://vkrdownloader.xyz/server/?api_key=vkrdownloader&vkr=${encodedUrl}`;
+      response = await axios.get(apiUrl);
+    } catch (apiError) {
+      console.error('APIレスポンス取得エラー:', apiError.response ? apiError.response.data : apiError.message);
+      await sendReplyMessage(roomId, '動画情報の取得に失敗しました。URLが正しいか確認してください。', { accountId, messageId });
+      return;
+    }
+
     const data = response.data.data;
 
     if (!data || !data.downloads || data.downloads.length === 0) {
@@ -31,68 +39,89 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
       return;
     }
 
-    // 1. 映像と音声のストリームURLを特定
-    const videoStream = data.downloads.find(dl => dl.format_id.includes('1080p') && dl.ext === 'mp4');
-    const audioStream = data.downloads.find(dl => dl.format_id.includes('m4a'));
+    // 2. 映像と音声のストリームURLを特定
+    const videoStream = data.downloads.find(dl => dl.format_id && dl.format_id.includes('1080p'));
+    const audioStream = data.downloads.find(dl => dl.format_id && dl.format_id.includes('m4a'));
 
     if (!videoStream || !audioStream) {
-      await sendReplyMessage(roomId, 'あらら💦　エラーが発生したね　音声ストリーム、ビデオストリームが見つからなかったよ', { accountId, messageId });
+      const availableFormats = data.downloads.map(dl => `・${dl.format_id} (ext: ${dl.ext})`).join('\n');
+      await sendReplyMessage(roomId, `指定された動画の高画質映像ストリーム、または音声ストリームが見つかりませんでした。\n利用可能なフォーマット:\n${availableFormats}`, { accountId, messageId });
+      return;
+    }
+    
+    // 3. 映像と音声ファイルをダウンロード
+    try {
+      videoFilePath = path.join(__dirname, '..', 'temp', `video_${Date.now()}.mp4`);
+      audioFilePath = path.join(__dirname, '..', 'temp', `audio_${Date.now()}.m4a`);
+      await fs.promises.mkdir(path.dirname(videoFilePath), { recursive: true });
+
+      const videoWriter = fs.createWriteStream(videoFilePath);
+      const audioWriter = fs.createWriteStream(audioFilePath);
+      
+      await axios({ url: videoStream.url, method: 'GET', responseType: 'stream' }).then(res => res.data.pipe(videoWriter));
+      await axios({ url: audioStream.url, method: 'GET', responseType: 'stream' }).then(res => res.data.pipe(audioWriter));
+
+      await new Promise((resolve, reject) => {
+        videoWriter.on('finish', resolve);
+        videoWriter.on('error', reject);
+      });
+      await new Promise((resolve, reject) => {
+        audioWriter.on('finish', resolve);
+        audioWriter.on('error', reject);
+      });
+    } catch (downloadError) {
+      console.error('一時ファイルのダウンロードエラー:', downloadError.message);
+      await sendReplyMessage(roomId, '一時ファイルのダウンロード中にエラーが発生しました。', { accountId, messageId });
       return;
     }
 
-    // 2. 映像と音声ファイルをダウンロード
-    videoFilePath = path.join(__dirname, '..', 'temp', `video_${Date.now()}.mp4`);
-    audioFilePath = path.join(__dirname, '..', 'temp', `audio_${Date.now()}.m4a`);
-    await fs.promises.mkdir(path.dirname(videoFilePath), { recursive: true });
+    // 4. FFmpegで映像と音声を結合
+    try {
+      mergedFilePath = path.join(__dirname, '..', 'temp', `merged_${Date.now()}.mp4`);
+      await new Promise((resolve, reject) => {
+        ffmpeg()
+          .input(videoFilePath)
+          .input(audioFilePath)
+          .videoCodec('copy') // 映像コーデックをコピー
+          .audioCodec('copy') // 音声コーデックをコピー
+          .output(mergedFilePath)
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err))
+          .run();
+      });
+    } catch (ffmpegError) {
+      console.error('FFmpeg結合エラー:', ffmpegError.message);
+      await sendReplyMessage(roomId, '動画と音声の結合中にエラーが発生しました。', { accountId, messageId });
+      return;
+    }
 
-    const videoWriter = fs.createWriteStream(videoFilePath);
-    const audioWriter = fs.createWriteStream(audioFilePath);
-    
-    await axios({ url: videoStream.url, method: 'GET', responseType: 'stream' }).then(res => res.data.pipe(videoWriter));
-    await axios({ url: audioStream.url, method: 'GET', responseType: 'stream' }).then(res => res.data.pipe(audioWriter));
+    // 5. Chatworkに結合済みファイルをアップロード
+    try {
+      const uploadResponse = await chatworkApi.post(`/rooms/${roomId}/files`, {
+        file: fs.createReadStream(mergedFilePath),
+      }, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
-    await new Promise((resolve, reject) => {
-      videoWriter.on('finish', resolve);
-      videoWriter.on('error', reject);
-    });
-    await new Promise((resolve, reject) => {
-      audioWriter.on('finish', resolve);
-      audioWriter.on('error', reject);
-    });
+      const fileId = uploadResponse.data.file_id;
+      const title = data.title;
+      const formattedMessage = `[info][title]${title}[/title][file:${fileId}]`;
+      await sendReplyMessage(roomId, formattedMessage, { accountId, messageId });
 
-    // 3. FFmpegで映像と音声を結合
-    mergedFilePath = path.join(__dirname, '..', 'temp', `merged_${Date.now()}.mp4`);
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(videoFilePath)
-        .input(audioFilePath)
-        .videoCodec('copy') // 映像コーデックをコピー
-        .audioCodec('copy') // 音声コーデックをコピー
-        .output(mergedFilePath)
-        .on('end', () => resolve())
-        .on('error', (err) => reject(err))
-        .run();
-    });
-
-    // 4. Chatworkに結合済みファイルをアップロード
-    const uploadResponse = await chatworkApi.post(`/rooms/${roomId}/files`, {
-      file: fs.createReadStream(mergedFilePath),
-    }, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    const fileId = uploadResponse.data.file_id;
-    const title = data.title;
-
-    await sendReplyMessage(roomId, formattedMessage, { accountId, messageId });
+    } catch (uploadError) {
+      console.error('ファイルアップロードエラー:', uploadError.response ? uploadError.response.data : uploadError.message);
+      await sendReplyMessage(roomId, '最終ファイルのアップロード中にエラーが発生しました。', { accountId, messageId });
+      return;
+    }
 
   } catch (error) {
-    console.error('YouTubeコマンドエラー:', error.response ? error.response.data : error.message);
-    await sendReplyMessage(roomId, '動画の処理中にエラーが発生しました。URLが正しいか確認してください。', { accountId, messageId });
+    // 予期せぬエラー
+    console.error('YouTubeコマンドで予期せぬエラー:', error.message);
+    await sendReplyMessage(roomId, 'YouTubeコマンドの実行中に予期せぬエラーが発生しました。', { accountId, messageId });
   } finally {
-    // 5. 一時ファイルをすべて削除
+    // 6. 一時ファイルをすべて削除
     const filesToDelete = [videoFilePath, audioFilePath, mergedFilePath].filter(Boolean);
     for (const filePath of filesToDelete) {
       try {
