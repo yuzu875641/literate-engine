@@ -2,100 +2,101 @@ const axios = require("axios");
 const { URLSearchParams } = require('url');
 
 const CHATWORK_API_TOKEN = process.env.CHATWORK_API_TOKEN;
+const CHATWORK_API_URL = "https://api.chatwork.com/v2";
+
+if (!CHATWORK_API_TOKEN) {
+  console.error("CHATWORK_API_TOKEN is not set.");
+  process.exit(1);
+}
 
 const chatworkApi = axios.create({
-  baseURL: 'https://api.chatwork.com/v2',
+  baseURL: CHATWORK_API_URL,
   headers: {
-    'X-ChatWorkToken': CHATWORK_API_TOKEN,
-    'Content-Type': 'application/x-www-form-urlencoded'
+    "X-ChatWorkToken": CHATWORK_API_TOKEN
   }
 });
 
-// メッセージを送信する共通関数
-async function sendChatwork(body, roomId) {
+async function isUserAdmin(accountId, roomId) {
   try {
-    await chatworkApi.post(`/rooms/${roomId}/messages`, new URLSearchParams({ body }).toString());
+    const response = await chatworkApi.get(`/rooms/${roomId}/members`);
+    const members = response.data;
+    const user = members.find(member => member.account_id === accountId);
+    return user && user.role === 'admin';
   } catch (error) {
-    console.error('メッセージ送信エラー:', error.response ? error.response.data : error.message);
+    console.error('Failed to get user role:', error.response ? error.response.data : error.message);
+    return false;
   }
 }
 
-// 返信メッセージを送信する共通関数
-async function sendReplyMessage(roomId, message, { accountId, messageId }) {
-  const replyBody = `[rp aid=${accountId} to=${roomId}-${messageId}][pname:${accountId}]さん\n${message}`;
-  await sendChatwork(replyBody, roomId);
-}
-
-// メンバー情報を取得する共通関数
 async function getChatworkMembers(roomId) {
   try {
     const response = await chatworkApi.get(`/rooms/${roomId}/members`);
     return response.data;
   } catch (error) {
-    console.error('メンバー情報取得エラー:', error.response ? error.response.data : error.message);
-    return null;
+    console.error('メンバーリストの取得に失敗しました:', error.response ? error.response.data : error.message);
+    return [];
   }
 }
 
-// ユーザーが管理者かどうかを判定する関数
-async function isUserAdmin(accountId, roomId) {
-  const members = await getChatworkMembers(roomId);
-  if (!members) return false;
-  const sender = members.find(member => member.account_id === accountId);
-  return sender && sender.role === 'admin';
-}
+async function sendReplyMessage(roomId, message, options = {}) {
+  const { accountId, messageId, toAll = false } = options;
+  let body = message;
 
-// ユーザーの権限を変更するヘルパー関数
-async function changeUserRole(targetAccountId, targetRole, roomId, messageId, accountId, botAccountId) {
-  if (targetAccountId === botAccountId) {
-    await sendReplyMessage(roomId, 'ボット自身の権限は変更できません。', { accountId, messageId });
-    return;
+  if (toAll) {
+    body = `[toall]${body}`;
+  } else if (accountId && messageId) {
+    body = `[rp aid=${accountId} to=${roomId}-${messageId}]${body}`;
   }
-  
-  const members = await getChatworkMembers(roomId);
-  if (!members) {
-    await sendReplyMessage(roomId, 'メンバーリストの取得に失敗しました。', { accountId, messageId });
-    return;
-  }
-
-  const memberRoles = members.reduce((acc, member) => {
-    if (member.role === 'admin') acc.adminIds.push(member.account_id);
-    else if (member.role === 'member') acc.memberIds.push(member.account_id);
-    else if (member.role === 'readonly') acc.readonlyIds.push(member.account_id);
-    return acc;
-  }, { adminIds: [], memberIds: [], readonlyIds: [] });
-
-  memberRoles.adminIds = memberRoles.adminIds.filter(id => id !== targetAccountId);
-  memberRoles.memberIds = memberRoles.memberIds.filter(id => id !== targetAccountId);
-  memberRoles.readonlyIds = memberRoles.readonlyIds.filter(id => id !== targetAccountId);
-
-  if (targetRole === 'admin') {
-    memberRoles.adminIds.push(targetAccountId);
-  } else if (targetRole === 'member') {
-    memberRoles.memberIds.push(targetAccountId);
-  } else if (targetRole === 'readonly') {
-    memberRoles.readonlyIds.push(targetAccountId);
-  }
-
-  const encodedParams = new URLSearchParams();
-  encodedParams.set('members_admin_ids', memberRoles.adminIds.join(','));
-  encodedParams.set('members_member_ids', memberRoles.memberIds.join(','));
-  encodedParams.set('members_readonly_ids', memberRoles.readonlyIds.join(','));
 
   try {
-    await chatworkApi.put(`/rooms/${roomId}/members`, encodedParams.toString());
-    await sendReplyMessage(roomId, `[piconname:${targetAccountId}]さんの権限を${targetRole}に変更しました。`, { accountId, messageId });
+    const params = new URLSearchParams();
+    params.append('body', body);
+
+    await chatworkApi.post(`/rooms/${roomId}/messages`, params);
   } catch (error) {
-    console.error(`権限変更エラー (${targetRole}):`, error.response ? error.response.data : error.message);
-    await sendReplyMessage(roomId, `[piconname:${targetAccountId}]さんの権限変更に失敗しました。`, { accountId, messageId });
+    console.error('メッセージ送信エラー:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
+async function changeUserRole(accountId, role, roomId, messageId, currentAccountId) {
+  try {
+    const isAdmin = await isUserAdmin(currentAccountId, roomId);
+    if (!isAdmin) {
+      await sendReplyMessage(roomId, "このコマンドは管理者のみが使用できます。", { accountId: currentAccountId, messageId });
+      return;
+    }
+    const params = new URLSearchParams();
+    params.append('members_admin', role === 'admin' ? `${accountId}` : '');
+    params.append('members_member', role === 'member' ? `${accountId}` : '');
+    params.append('members_readonly', role === 'readonly' ? `${accountId}` : '');
+
+    await chatworkApi.put(`/rooms/${roomId}/members`, params);
+    
+    await sendReplyMessage(roomId, `[piconname:${accountId}]さんの権限を${role}に変更しました。`, { accountId: currentAccountId, messageId });
+  } catch (error) {
+    console.error(`Failed to change user role to ${role}:`, error.response ? error.response.data : error.message);
+  }
+}
+
+async function deleteMessage(roomId, messageId, accountId) {
+  try {
+    const isAdmin = await isUserAdmin(accountId, roomId);
+    if (!isAdmin) {
+      await sendReplyMessage(roomId, "このコマンドは管理者のみが使用できます。", { accountId, messageId });
+      return;
+    }
+    await chatworkApi.delete(`/rooms/${roomId}/messages/${messageId}`);
+  } catch (error) {
+    console.error(`Failed to delete message ${messageId}:`, error.response ? error.response.data : error.message);
   }
 }
 
 module.exports = {
-  chatworkApi,
-  sendChatwork,
-  sendReplyMessage,
-  getChatworkMembers,
   isUserAdmin,
-  changeUserRole
+  sendReplyMessage,
+  chatworkApi,
+  getChatworkMembers,
+  changeUserRole,
+  deleteMessage,
 };
