@@ -14,7 +14,7 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
     const youtubeUrlMatch = body.match(/\/youtube\/(https:\/\/(?:www\.)?youtube\.com\/watch\?v=[a-zA-Z0-9_-]+|https:\/\/youtu\.be\/[a-zA-Z0-9_-]+)/);
     
     if (!youtubeUrlMatch) {
-      await sendReplyMessage(roomId, 'YouTube動画のURLが見つかりませんでした。', { accountId, messageId });
+      await sendReplyMessage(roomId, 'YouTube動画のURLが見つかりませんでした。例: /youtube/https://www.youtube.com/watch?v=...', { accountId, messageId });
       return;
     }
 
@@ -45,7 +45,7 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
 
     if (!videoStream || !audioStream) {
       const availableFormats = data.downloads.map(dl => `・${dl.format_id} (ext: ${dl.ext})`).join('\n');
-      await sendReplyMessage(roomId, `指定された動画の高画質映像ストリーム、または音声ストリームが見つかりませんでした。\n利用可能なフォーマット:\n${availableFormats}`, { accountId, messageId });
+      await sendReplyMessage(roomId, `指定された動画の1080p映像ストリーム、または音声ストリームが見つかりませんでした。\n利用可能なフォーマット:\n${availableFormats}`, { accountId, messageId });
       return;
     }
     
@@ -58,8 +58,9 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
       const videoWriter = fs.createWriteStream(videoFilePath);
       const audioWriter = fs.createWriteStream(audioFilePath);
       
-      await axios({ url: videoStream.url, method: 'GET', responseType: 'stream' }).then(res => res.data.pipe(videoWriter));
-      await axios({ url: audioStream.url, method: 'GET', responseType: 'stream' }).then(res => res.data.pipe(audioWriter));
+      // Axiosリクエストに認証情報を追加し、リダイレクトを追跡
+      await axios({ url: videoStream.url, method: 'GET', responseType: 'stream', withCredentials: true, maxRedirects: 5 }).then(res => res.data.pipe(videoWriter));
+      await axios({ url: audioStream.url, method: 'GET', responseType: 'stream', withCredentials: true, maxRedirects: 5 }).then(res => res.data.pipe(audioWriter));
 
       await new Promise((resolve, reject) => {
         videoWriter.on('finish', resolve);
@@ -71,7 +72,7 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
       });
     } catch (downloadError) {
       console.error('一時ファイルのダウンロードエラー:', downloadError.message);
-      await sendReplyMessage(roomId, '一時ファイルのダウンロード中にエラーが発生しました。', { accountId, messageId });
+      await sendReplyMessage(roomId, `一時ファイルのダウンロード中にエラーが発生しました。\nエラー詳細: ${downloadError.message}`, { accountId, messageId });
       return;
     }
 
@@ -91,7 +92,7 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
       });
     } catch (ffmpegError) {
       console.error('FFmpeg結合エラー:', ffmpegError.message);
-      await sendReplyMessage(roomId, '動画と音声の結合中にエラーが発生しました。', { accountId, messageId });
+      await sendReplyMessage(roomId, `動画と音声の結合中にエラーが発生しました。\nエラー詳細: ${ffmpegError.message}`, { accountId, messageId });
       return;
     }
 
@@ -112,14 +113,14 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
 
     } catch (uploadError) {
       console.error('ファイルアップロードエラー:', uploadError.response ? uploadError.response.data : uploadError.message);
-      await sendReplyMessage(roomId, '最終ファイルのアップロード中にエラーが発生しました。', { accountId, messageId });
+      await sendReplyMessage(roomId, `最終ファイルのアップロード中にエラーが発生しました。\nエラー詳細: ${uploadError.message}`, { accountId, messageId });
       return;
     }
 
   } catch (error) {
     // 予期せぬエラー
     console.error('YouTubeコマンドで予期せぬエラー:', error.message);
-    await sendReplyMessage(roomId, 'YouTubeコマンドの実行中に予期せぬエラーが発生しました。', { accountId, messageId });
+    await sendReplyMessage(roomId, `YouTubeコマンドの実行中に予期せぬエラーが発生しました。\nエラー詳細: ${error.message}`, { accountId, messageId });
   } finally {
     // 6. 一時ファイルをすべて削除
     const filesToDelete = [videoFilePath, audioFilePath, mergedFilePath].filter(Boolean);
