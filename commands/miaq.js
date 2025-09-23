@@ -1,19 +1,20 @@
 const axios = require("axios");
 const fs = require('fs').promises;
 const path = require('path');
-const { chatworkApi, sendReplyMessage, getChatworkMembers } = require("../config");
+const { chatworkApi, sendReplyMessage } = require("../config");
 
 async function handleMiaqCommand(roomId, messageId, accountId, body) {
+  let filepath; // エラー処理のためにスコープを広げる
   try {
     const urlMatch = body.match(/\/miaq\/(https:\/\/www\.chatwork\.com\/\#!rid(\d+)-(\d+))/);
     if (!urlMatch) {
-      await sendReplyMessage(roomId, 'メッセージURLの形式が正しくありません。', { accountId, messageId });
+      await sendReplyMessage(roomId, 'メッセージURLの形式が正しくありません。例: /miaq/https://www.chatwork.com/#!rid12345-67890', { accountId, messageId });
       return;
     }
 
     const [, , targetRoomId, targetMessageId] = urlMatch;
 
-    // 1. 指定されたメッセージの情報をChatwork APIから取得
+    // 1. 指定されたメッセージの情報をChatwork APIから直接取得
     const messageResponse = await chatworkApi.get(`/rooms/${targetRoomId}/messages/${targetMessageId}`, {
       params: {
         access_token: process.env.CHATWORK_API_TOKEN,
@@ -21,36 +22,30 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
     });
 
     const message = messageResponse.data;
-    const senderAccountId = message.account_id;
+    const senderAccountId = message.account.account_id;
+    const senderName = message.account.name;
+    const senderIconUrl = message.account.avatar_image_url;
     const messageBody = message.body;
 
-    // 2. メンバーリストを取得して、メッセージ送信者の詳細情報を探す
-    const members = await getChatworkMembers(targetRoomId);
-    const senderInfo = members.find(member => member.account_id === senderAccountId);
-
-    if (!senderInfo) {
-      await sendReplyMessage(roomId, 'メッセージ送信者の情報が見つかりませんでした。', { accountId, messageId });
-      return;
-    }
-
-    const accountName = encodeURIComponent(senderInfo.name);
-    const iconUrl = encodeURIComponent(senderInfo.icon_path);
+    // 2. MIQサービスにリクエストするURLを生成
+    // APIレスポンスから直接取得した情報を使用
+    const accountName = encodeURIComponent(senderName);
+    const iconUrl = encodeURIComponent(senderIconUrl);
     const encodedContent = encodeURIComponent(messageBody);
 
-    // 3. MIQサービスにリクエストするURLを生成
     const miqUrl = `https://miq-yol8.onrender.com/?id=ID${senderAccountId}&name=${accountName}&content=${encodedContent}&icon=${iconUrl}&type=color`;
 
-    // 4. MIQから画像をダウンロード
+    // 3. MIQから画像をダウンロード
     const imageResponse = await axios.get(miqUrl, { responseType: 'arraybuffer' });
     const imageBuffer = imageResponse.data;
 
-    // 5. 画像を一時ファイルとして保存
+    // 4. 画像を一時ファイルとして保存
     const filename = `miaq_${Date.now()}.png`;
-    const filepath = path.join(__dirname, '..', 'temp', filename); // tempディレクトリに保存
+    filepath = path.join(__dirname, '..', 'temp', filename); // tempディレクトリに保存
     await fs.mkdir(path.dirname(filepath), { recursive: true });
     await fs.writeFile(filepath, imageBuffer);
 
-    // 6. Chatworkにファイルをアップロード
+    // 5. Chatworkにファイルをアップロード
     const uploadResponse = await chatworkApi.post(`/rooms/${roomId}/files`, {
       file: fs.createReadStream(filepath),
     }, {
@@ -61,16 +56,14 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
 
     const fileId = uploadResponse.data.file_id;
     
-    // 7. アップロードしたファイルを添付してメッセージを送信
-    await sendReplyMessage(roomId, `[info][preview id=${fileId} ht=132][download:${fileId}]miaq[/download][/info]`, { accountId, messageId });
-
-    // 8. 一時ファイルを削除
-    await fs.unlink(filepath);
+    // 6. アップロードしたファイルを添付してメッセージを送信
+    await sendReplyMessage(roomId, `[download:${fileId}]miaq[/download]`, { accountId, messageId });
 
   } catch (error) {
     console.error('MIQコマンドエラー:', error.response ? error.response.data : error.message);
-    await sendReplyMessage(roomId, '画像の生成または送信に失敗しました。URLが正しいか確認してください。', { accountId, messageId });
-    // エラー時も一時ファイルが残る可能性があるので、削除を試みる
+    await sendReplyMessage(roomId, '画像の生成または送信に失敗しました。URLが正しいか、またはメッセージが削除されていないか確認してください。', { accountId, messageId });
+  } finally {
+    // 7. 一時ファイルを削除（成功・失敗に関わらず実行）
     if (filepath) {
       try {
         await fs.unlink(filepath);
