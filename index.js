@@ -2,7 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const { URLSearchParams } = require('url');
 const { isUserAdmin, sendReplyMessage, chatworkApi, getChatworkMembers, changeUserRole } = require("./config");
-const fs = require('fs').promises;
+const fs = require('fs'); // 修正：.promisesを削除
 const path = require('path');
 const cron = require('node-cron');
 
@@ -47,7 +47,7 @@ const CHATWORK_EMOJIS = [
 ];
 
 const MESSAGE_LOG_FILE = path.join(__dirname, 'message_log.json');
-const REPORT_ROOM_ID = 407802259; // レポートを投稿したい部屋のIDに置き換えてください
+const REPORT_ROOM_ID = 123456789; // レポートを投稿したい部屋のIDに置き換えてください
 
 // ユーザーの権限を不正なメッセージで変更する関数
 async function blockMembers(accountIdToBlock, roomId, messageId, accountId) {
@@ -92,7 +92,7 @@ async function handleMessageLog(event) {
     };
 
     try {
-        await fs.appendFile(MESSAGE_LOG_FILE, JSON.stringify(logEntry) + '\n');
+        await fs.promises.appendFile(MESSAGE_LOG_FILE, JSON.stringify(logEntry) + '\n');
     } catch (error) {
         console.error('メッセージログの保存中にエラーが発生しました:', error);
     }
@@ -102,7 +102,7 @@ async function handleMessageLog(event) {
 async function generateAndSendReport() {
     console.log('ログレポートの生成と送信を開始します...');
     try {
-        const logContent = await fs.readFile(MESSAGE_LOG_FILE, 'utf8');
+        const logContent = await fs.promises.readFile(MESSAGE_LOG_FILE, 'utf8');
         const logs = logContent.trim().split('\n').map(line => JSON.parse(line));
 
         if (logs.length === 0) {
@@ -113,13 +113,13 @@ async function generateAndSendReport() {
         const reportFileName = `ChatLog_${new Date().toISOString().split('T')[0]}.txt`;
         let reportContent = '';
         for (const log of logs) {
-            // メッセージをフォーマット
             reportContent += `[${log.timestamp}] account_id: ${log.account_id}, room_id: ${log.room_id}\nBody: ${log.body}\n\n`;
         }
 
         const reportFilePath = path.join(__dirname, 'temp', reportFileName);
-        await fs.mkdir(path.dirname(reportFilePath), { recursive: true });
-        await fs.writeFile(reportFilePath, reportContent);
+        await fs.promises.mkdir(path.dirname(reportFilePath), { recursive: true });
+        await fs.promises.writeFile(reportFilePath, reportContent);
+        console.log(`レポートファイルが作成されました: ${reportFilePath}`);
 
         // ファイルをChatworkにアップロード
         const uploadResponse = await chatworkApi.post(`/rooms/${REPORT_ROOM_ID}/files`, {
@@ -133,13 +133,15 @@ async function generateAndSendReport() {
 
         console.log('レポートの送信が完了しました。');
 
-        // ログファイルとレポートファイルを削除
-        await fs.unlink(MESSAGE_LOG_FILE);
-        await fs.unlink(reportFilePath);
+        await fs.promises.unlink(MESSAGE_LOG_FILE);
+        await fs.promises.unlink(reportFilePath);
         console.log('ログファイルとレポートファイルを削除しました。');
 
     } catch (error) {
-        console.error('レポートの生成または送信中にエラーが発生しました:', error.response ? error.response.data : error.message);
+        console.error('レポートの生成または送信中にエラーが発生しました:', error);
+        await fs.promises.unlink(MESSAGE_LOG_FILE).catch(e => console.error('ログファイルの削除に失敗しました:', e));
+        
+        await sendReplyMessage(REPORT_ROOM_ID, `メッセージログレポートの生成中にエラーが発生しました。\nエラー詳細: ${error.message}`, { accountId: botAccountId, messageId: null });
     }
 }
 
@@ -274,7 +276,7 @@ app.post("/webhook", async (req, res) => {
     return res.status(200).end();
   }
 
-
+  // ここに新しい /log/ コマンドを追加
   if (body.trim() === '/log/') {
     const isAdmin = await isUserAdmin(accountId, roomId);
     if (isAdmin) {
