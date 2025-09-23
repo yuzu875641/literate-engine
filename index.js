@@ -24,6 +24,7 @@ const handleScratchUnreadCommand = require("./commands/scratch_unread");
 const handleAllMemberCommand = require("./commands/allmember");
 const handleAiCommand = require("./commands/ai");
 const handleMiaqCommand = require("./commands/miaq"); 
+const handleYoutubeCommand = require("./commands/youtube"); 
 
 
 const app = express();
@@ -191,7 +192,10 @@ app.post("/webhook", async (req, res) => {
     await handleMiaqCommand(roomId, messageId, accountId, body);
     return res.status(200).end();
   }
-  
+  if (body.startsWith("/youtube/")) {
+    await handleYoutubeCommand(roomId, messageId, accountId, body);
+    return res.status(200).end();
+  }
   
   
   // 管理者コマンドのチェック
