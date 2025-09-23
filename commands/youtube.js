@@ -27,7 +27,7 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
     const allDownloads = data.downloads
       .filter(dl => dl.url)
       .map(dl => `・${dl.format_id}\n[code]${dl.url}[/code]`)
-      .join('\n\n');
+      .join('\n');
 
     if (!allDownloads) {
       await sendReplyMessage(roomId, '指定された動画の有効なダウンロードURLが一つも見つかりませんでした。', { accountId, messageId });
