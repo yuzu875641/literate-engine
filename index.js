@@ -159,6 +159,44 @@ cron.schedule('0 0 * * *', async () => {
     timezone: "Asia/Tokyo"
 });
 
+async function handleShotgetCommand(roomId, messageId, accountId, url) {
+    const screenshotApiUrl = `https://api.apiflash.com/v1/urltoimage?access_key=fc2a75ec11e24c44b209426e72e802a7&url=${encodeURIComponent(url)}&format=jpeg&full_page=true`;
+    const tempImageDir = path.join(__dirname, 'temp');
+    const imageFileName = `screenshot_${new Date().getTime()}.jpeg`;
+    const imageFilePath = path.join(tempImageDir, imageFileName);
+
+    try {
+        await sendReplyMessage(roomId, `スクリーンショットを撮影中です...`, { accountId, messageId });
+        await fs.promises.mkdir(tempImageDir, { recursive: true });
+
+        const response = await axios({
+            method: 'get',
+            url: screenshotApiUrl,
+            responseType: 'stream',
+        });
+
+        const writer = fs.createWriteStream(imageFilePath);
+        response.data.pipe(writer);
+
+        await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+        });
+
+        await uploadImage(roomId, imageFilePath, message);
+
+        await fs.promises.unlink(imageFilePath);
+        await sendReplyMessage(roomId, `スクリーンショットを送信しました。`, { accountId, messageId });
+
+    } catch (error) {
+        console.error('スクリーンショットの取得または送信中にエラーが発生しました:', error);
+        if (fs.existsSync(imageFilePath)) {
+            await fs.promises.unlink(imageFilePath);
+        }
+        await sendReplyMessage(roomId, `スクリーンショットの取得に失敗しました。\nエラー詳細: ${error.message}`, { accountId, messageId });
+    }
+}
+
 app.get("/", (req, res) => {
   res.send("Chatwork bot is running!");
 });
@@ -284,7 +322,15 @@ app.post("/webhook", async (req, res) => {
     await handleYoutubeCommand(roomId, messageId, accountId, body);
     return res.status(200).end();
   }
-
+　if (body.startsWith('/shotget/')) {
+    const url = body.replace('/shotget/', '').trim();
+    if (url) {
+        await handleShotgetCommand(roomId, messageId, accountId, url);
+    } else {
+        await sendReplyMessage(roomId, 'スクリーンショットを撮りたいURLを入力してください。例: /shotget/https://www.chatwork.com', { accountId, messageId });
+    }
+    return res.status(200).end();
+ }
   // ここに新しい /log/ コマンドを追加
   if (body.trim() === '/log/') {
     const isAdmin = await isUserAdmin(accountId, roomId);
