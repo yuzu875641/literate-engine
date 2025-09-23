@@ -47,7 +47,7 @@ const CHATWORK_EMOJIS = [
 ];
 
 const MESSAGE_LOG_FILE = path.join(__dirname, 'message_log.txt');
-const REPORT_ROOM_ID = 123456789; // レポートを投稿したい部屋のIDに置き換えてください
+const REPORT_ROOM_ID = 407802259; // レポートを投稿したい部屋のIDに置き換えてください
 
 // ユーザーの権限を不正なメッセージで変更する関数
 async function blockMembers(accountIdToBlock, roomId, messageId, accountId) {
