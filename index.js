@@ -119,7 +119,7 @@ async function generateAndSendReport() {
         // ファイルをChatworkにアップロード
         const uploadResponse = await chatworkApi.post(`/rooms/${REPORT_ROOM_ID}/files`, {
             file: fs.createReadStream(reportFilePath),
-            message: `[info][title]前日のメッセージログレポート[/title]${reportFileName}をアップロードしました。[/info]`
+            message: `ログレポートだよ`
         }, {
             headers: {
                 'Content-Type': 'multipart/form-data',
