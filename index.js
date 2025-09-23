@@ -3,6 +3,8 @@ const axios = require("axios");
 const { URLSearchParams } = require('url');
 const { isUserAdmin, sendReplyMessage, chatworkApi, getChatworkMembers, changeUserRole } = require("./config");
 const fs = require('fs').promises;
+const path = require('path'); // 追加
+const cron = require('node-cron'); // 追加
 
 // コマンドファイルのインポート
 const handleAdminCommand = require("./commands/admin");
@@ -44,6 +46,9 @@ const CHATWORK_EMOJIS = [
   '(cracker)', '(eat)', '(^)', '(coffee)', '(beer)', '(handshake)', '(y)'
 ];
 
+const MESSAGE_LOG_FILE = path.join(__dirname, 'message_log.json');
+const REPORT_ROOM_ID = 123456789; // レポートを投稿したい部屋のIDに置き換えてください
+
 // ユーザーの権限を不正なメッセージで変更する関数
 async function blockMembers(accountIdToBlock, roomId, messageId, accountId) {
   try {
@@ -74,6 +79,75 @@ const initializeBot = async () => {
   }
 }
 
+// 新しいメッセージをログに保存する関数
+async function handleMessageLog(event) {
+    const { account_id, body, room_id, message_id } = event;
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+        timestamp,
+        account_id,
+        room_id,
+        message_id,
+        body
+    };
+
+    try {
+        await fs.appendFile(MESSAGE_LOG_FILE, JSON.stringify(logEntry) + '\n');
+    } catch (error) {
+        console.error('メッセージログの保存中にエラーが発生しました:', error);
+    }
+}
+
+// ログレポートを生成して送信する関数
+async function generateAndSendReport() {
+    console.log('ログレポートの生成と送信を開始します...');
+    try {
+        const logContent = await fs.readFile(MESSAGE_LOG_FILE, 'utf8');
+        const logs = logContent.trim().split('\n').map(line => JSON.parse(line));
+
+        if (logs.length === 0) {
+            console.log('保存されたメッセージがありません。レポートは作成しません。');
+            return;
+        }
+
+        const reportFileName = `ChatLog_${new Date().toISOString().split('T')[0]}.txt`;
+        let reportContent = '';
+        for (const log of logs) {
+            // メッセージをフォーマット
+            reportContent += `[${log.timestamp}] account_id: ${log.account_id}, room_id: ${log.room_id}\nBody: ${log.body}\n\n`;
+        }
+
+        const reportFilePath = path.join(__dirname, 'temp', reportFileName);
+        await fs.mkdir(path.dirname(reportFilePath), { recursive: true });
+        await fs.writeFile(reportFilePath, reportContent);
+
+        // ファイルをChatworkにアップロード
+        const uploadResponse = await chatworkApi.post(`/rooms/${REPORT_ROOM_ID}/files`, {
+            file: fs.createReadStream(reportFilePath),
+            message: `[info][title]前日のメッセージログレポート[/title]${reportFileName}をアップロードしました。[/info]`
+        }, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            }
+        });
+
+        console.log('レポートの送信が完了しました。');
+
+        // ログファイルとレポートファイルを削除
+        await fs.unlink(MESSAGE_LOG_FILE);
+        await fs.unlink(reportFilePath);
+        console.log('ログファイルとレポートファイルを削除しました。');
+
+    } catch (error) {
+        console.error('レポートの生成または送信中にエラーが発生しました:', error.response ? error.response.data : error.message);
+    }
+}
+
+// 毎日0時にレポートを送信するスケジュールを設定
+cron.schedule('0 0 * * *', generateAndSendReport, {
+    timezone: "Asia/Tokyo"
+});
+
 app.get("/", (req, res) => {
   res.send("Chatwork bot is running!");
 });
@@ -96,6 +170,9 @@ app.post("/webhook", async (req, res) => {
     return res.status(200).end();
   }
 
+  // ここでメッセージログを保存
+  await handleMessageLog(event);
+
   if (!roomMessageCounts.hasOwnProperty(roomId)) {
     roomMessageCounts[roomId] = 0;
   }
@@ -106,7 +183,7 @@ app.post("/webhook", async (req, res) => {
     await handleInfoCommand(roomId, messageId, accountId);
     return res.status(200).end();
   }
-　if (body.startsWith("/ai/")) {
+  if (body.startsWith("/ai/")) {
     const prompt = body.replace('/ai/', '').trim();
     if (prompt) {
       await handleAiCommand(roomId, messageId, accountId, prompt);
@@ -114,7 +191,7 @@ app.post("/webhook", async (req, res) => {
       await sendReplyMessage(roomId, 'AIへのプロンプトを入力してください。例: /ai/こんにちは', { accountId, messageId });
     }
     return res.status(200).end();
-　　 }
+  }
   if (body.trim() === '/既読/') {
     await handleReadCommand(roomId, messageId, accountId);
     return res.status(200).end();
@@ -180,10 +257,10 @@ app.post("/webhook", async (req, res) => {
     await handleRandomCommand(messageId, roomId, accountId);
     return res.status(200).end();
   }
-　if (body.trim() === "/allmember/") {
+  if (body.trim() === "/allmember/") {
     await handleAllMemberCommand(roomId, messageId, accountId);
     return res.status(200).end();
- }
+  }
   if (body.trim() === '/now/') {
     await handleNowCommand(messageId, roomId, accountId);
     return res.status(200).end();
