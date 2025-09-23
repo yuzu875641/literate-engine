@@ -187,6 +187,10 @@ app.post("/webhook", async (req, res) => {
     await handleNowCommand(messageId, roomId, accountId);
     return res.status(200).end();
   }
+  if (body.startsWith("/miaq/")) {
+    await handleMiaqCommand(roomId, messageId, accountId, body);
+    return res.status(200).end();
+  }
   
   
   
