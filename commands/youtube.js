@@ -6,7 +6,7 @@ async function handleYoutubeCommand(roomId, messageId, accountId, body) {
     const youtubeUrlMatch = body.match(/\/youtube\/(https:\/\/(?:www\.)?youtube\.com\/watch\?v=[a-zA-Z0-9_-]+|https:\/\/youtu\.be\/[a-zA-Z0-9_-]+)/);
     
     if (!youtubeUrlMatch) {
-      await sendReplyMessage(roomId, 'YouTube動画のURLが見つかりませんでした。例: /youtube/https://www.youtube.com/watch?v=...', { accountId, messageId });
+      await sendReplyMessage(roomId, 'YouTube動画のURLが見つかりませんでした。', { accountId, messageId });
       return;
     }
 
