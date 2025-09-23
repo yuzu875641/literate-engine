@@ -3,8 +3,8 @@ const axios = require("axios");
 const { URLSearchParams } = require('url');
 const { isUserAdmin, sendReplyMessage, chatworkApi, getChatworkMembers, changeUserRole } = require("./config");
 const fs = require('fs').promises;
-const path = require('path'); // 追加
-const cron = require('node-cron'); // 追加
+const path = require('path');
+const cron = require('node-cron');
 
 // コマンドファイルのインポート
 const handleAdminCommand = require("./commands/admin");
@@ -25,8 +25,8 @@ const handleScratchCommand = require("./commands/scratch");
 const handleScratchUnreadCommand = require("./commands/scratch_unread");
 const handleAllMemberCommand = require("./commands/allmember");
 const handleAiCommand = require("./commands/ai");
-const handleMiaqCommand = require("./commands/miaq"); 
-const handleYoutubeCommand = require("./commands/youtube"); 
+const handleMiaqCommand = require("./commands/miaq");
+const handleYoutubeCommand = require("./commands/youtube");
 
 
 const app = express();
@@ -271,6 +271,18 @@ app.post("/webhook", async (req, res) => {
   }
   if (body.startsWith("/youtube/")) {
     await handleYoutubeCommand(roomId, messageId, accountId, body);
+    return res.status(200).end();
+  }
+
+
+  if (body.trim() === '/log/') {
+    const isAdmin = await isUserAdmin(accountId, roomId);
+    if (isAdmin) {
+      await generateAndSendReport();
+      await sendReplyMessage(roomId, 'メッセージログレポートを手動で生成し、送信しました。', { accountId, messageId });
+    } else {
+      await sendReplyMessage(roomId, 'このコマンドは管理者のみが使用できます。', { accountId, messageId });
+    }
     return res.status(200).end();
   }
   
