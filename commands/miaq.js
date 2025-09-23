@@ -62,7 +62,7 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
     const fileId = uploadResponse.data.file_id;
     
     // 7. アップロードしたファイルを添付してメッセージを送信
-    await sendReplyMessage(roomId, `[info][preview id=${fileId} ht=132][download:${fileId}][/download][/info]`, { accountId, messageId });
+    await sendReplyMessage(roomId, `[info][preview id=${fileId} ht=132][download:${fileId}]miaq[/download][/info]`, { accountId, messageId });
 
     // 8. 一時ファイルを削除
     await fs.unlink(filepath);
