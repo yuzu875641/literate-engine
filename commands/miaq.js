@@ -1,5 +1,5 @@
 const axios = require("axios");
-const fs = require('fs').promises;
+const fs = require('fs');
 const path = require('path');
 const { chatworkApi, sendReplyMessage } = require("../config");
 
@@ -42,8 +42,8 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
     // 4. 画像を一時ファイルとして保存
     const filename = `miaq_${Date.now()}.png`;
     filepath = path.join(__dirname, '..', 'temp', filename); // tempディレクトリに保存
-    await fs.mkdir(path.dirname(filepath), { recursive: true });
-    await fs.writeFile(filepath, imageBuffer);
+    await fs.promises.mkdir(path.dirname(filepath), { recursive: true });
+    await fs.promises.writeFile(filepath, imageBuffer);
 
     // 5. Chatworkにファイルをアップロード
     const uploadResponse = await chatworkApi.post(`/rooms/${roomId}/files`, {
@@ -66,7 +66,7 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
     // 7. 一時ファイルを削除（成功・失敗に関わらず実行）
     if (filepath) {
       try {
-        await fs.unlink(filepath);
+        await fs.promises.unlink(filepath);
       } catch (e) {
         console.error('一時ファイルの削除に失敗しました:', e);
       }
