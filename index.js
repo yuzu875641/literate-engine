@@ -1,8 +1,8 @@
 const express = require("express");
 const axios = require("axios");
 const { URLSearchParams } = require('url');
-const { isUserAdmin, sendReplyMessage, chatworkApi, getChatworkMembers, changeUserRole } = require("./config");
-const fs = require('fs'); // 修正：.promisesを削除
+const { isUserAdmin, sendReplyMessage, chatworkApi, getChatworkMembers, changeUserRole, deleteMessage } = require("./config");
+const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
 
@@ -46,7 +46,7 @@ const CHATWORK_EMOJIS = [
   '(cracker)', '(eat)', '(^)', '(coffee)', '(beer)', '(handshake)', '(y)'
 ];
 
-const MESSAGE_LOG_FILE = path.join(__dirname, 'message_log.json');
+const MESSAGE_LOG_FILE = path.join(__dirname, 'message_log.txt');
 const REPORT_ROOM_ID = 123456789; // レポートを投稿したい部屋のIDに置き換えてください
 
 // ユーザーの権限を不正なメッセージで変更する関数
@@ -81,18 +81,17 @@ const initializeBot = async () => {
 
 // 新しいメッセージをログに保存する関数
 async function handleMessageLog(event) {
-    const { account_id, body, room_id, message_id } = event;
+    const { account_id, body, room_id } = event;
     const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
-        account_id,
-        room_id,
-        message_id,
-        body
-    };
 
     try {
-        await fs.promises.appendFile(MESSAGE_LOG_FILE, JSON.stringify(logEntry) + '\n');
+        const roomMembers = await getChatworkMembers(room_id);
+        const sender = roomMembers.find(member => member.account_id === account_id);
+        const senderName = sender ? sender.name : `unknown_account(${account_id})`;
+
+        const logEntry = `${timestamp} - ${senderName}: ${body}\n`;
+
+        await fs.promises.appendFile(MESSAGE_LOG_FILE, logEntry);
     } catch (error) {
         console.error('メッセージログの保存中にエラーが発生しました:', error);
     }
@@ -103,7 +102,7 @@ async function generateAndSendReport() {
     console.log('ログレポートの生成と送信を開始します...');
     try {
         const logContent = await fs.promises.readFile(MESSAGE_LOG_FILE, 'utf8');
-        const logs = logContent.trim().split('\n').map(line => JSON.parse(line));
+        const logs = logContent.trim().split('\n').filter(line => line.length > 0);
 
         if (logs.length === 0) {
             console.log('保存されたメッセージがありません。レポートは作成しません。');
@@ -111,14 +110,10 @@ async function generateAndSendReport() {
         }
 
         const reportFileName = `ChatLog_${new Date().toISOString().split('T')[0]}.txt`;
-        let reportContent = '';
-        for (const log of logs) {
-            reportContent += `[${log.timestamp}] account_id: ${log.account_id}, room_id: ${log.room_id}\nBody: ${log.body}\n\n`;
-        }
-
         const reportFilePath = path.join(__dirname, 'temp', reportFileName);
+        
         await fs.promises.mkdir(path.dirname(reportFilePath), { recursive: true });
-        await fs.promises.writeFile(reportFilePath, reportContent);
+        await fs.promises.writeFile(reportFilePath, logs.join('\n'));
         console.log(`レポートファイルが作成されました: ${reportFilePath}`);
 
         // ファイルをChatworkにアップロード
