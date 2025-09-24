@@ -4,7 +4,7 @@ const path = require('path');
 const { chatworkApi, sendReplyMessage } = require("../config");
 
 async function handleMiaqCommand(roomId, messageId, accountId, body) {
-  let filepath; // エラー処理のためにスコープを広げる
+  let filepath; 
   try {
     const urlMatch = body.match(/\/miaq\/(https:\/\/www\.chatwork\.com\/\#!rid(\d+)-(\d+))/);
     if (!urlMatch) {
@@ -14,7 +14,7 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
 
     const [, , targetRoomId, targetMessageId] = urlMatch;
 
-    // 1. 指定されたメッセージの情報をChatwork APIから直接取得
+    
     const messageResponse = await chatworkApi.get(`/rooms/${targetRoomId}/messages/${targetMessageId}`, {
       params: {
         access_token: process.env.CHATWORK_API_TOKEN,
@@ -26,26 +26,20 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
     const senderName = message.account.name;
     const senderIconUrl = message.account.avatar_image_url;
     const messageBody = message.body;
-
-    // 2. MIQサービスにリクエストするURLを生成
-    // APIレスポンスから直接取得した情報を使用
     const accountName = encodeURIComponent(senderName);
     const iconUrl = encodeURIComponent(senderIconUrl);
     const encodedContent = encodeURIComponent(messageBody);
 
     const miqUrl = `https://miq-yol8.onrender.com/?id=ID${senderAccountId}&name=${accountName}&content=${encodedContent}&icon=${iconUrl}&type=color`;
-
-    // 3. MIQから画像をダウンロード
+   
     const imageResponse = await axios.get(miqUrl, { responseType: 'arraybuffer' });
     const imageBuffer = imageResponse.data;
 
-    // 4. 画像を一時ファイルとして保存
     const filename = `miaq_${Date.now()}.png`;
     filepath = path.join(__dirname, '..', 'temp', filename); // tempディレクトリに保存
     await fs.promises.mkdir(path.dirname(filepath), { recursive: true });
     await fs.promises.writeFile(filepath, imageBuffer);
 
-    // 5. Chatworkにファイルをアップロード
     const uploadResponse = await chatworkApi.post(`/rooms/${roomId}/files`, {
       file: fs.createReadStream(filepath),
     }, {
@@ -60,7 +54,7 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
     console.error('MIQコマンドエラー:', error.response ? error.response.data : error.message);
     await sendReplyMessage(roomId, '画像の生成または送信に失敗しました。URLが正しいか、またはメッセージが削除されていないか確認してください。', { accountId, messageId });
   } finally {
-    // 7. 一時ファイルを削除（成功・失敗に関わらず実行）
+    
     if (filepath) {
       try {
         await fs.promises.unlink(filepath);
