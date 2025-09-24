@@ -8,7 +8,7 @@ async function handleMiaqCommand(roomId, messageId, accountId, body) {
   try {
     const urlMatch = body.match(/\/miaq\/(https:\/\/www\.chatwork\.com\/\#!rid(\d+)-(\d+))/);
     if (!urlMatch) {
-      await sendReplyMessage(roomId, 'メッセージURLの形式が正しくありません。例: /miaq/https://www.chatwork.com/#!rid12345-67890', { accountId, messageId });
+      await sendReplyMessage(roomId, 'メッセージURLの形式が正しくありません。', { accountId, messageId });
       return;
     }
 
