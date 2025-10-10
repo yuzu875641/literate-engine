@@ -3,7 +3,7 @@ const axios = require('axios');
 
 module.exports = async (roomId, messageId, accountId, prompt) => {
   try {
-    const url = `https://gemini-server-phi.vercel.app/api/generat/${encodeURIComponent(prompt)}`;
+    const url = `https://gemini-server-phi.vercel.app/api/generate/${encodeURIComponent(prompt)}`;
 
     const response = await axios.get(url);
     const aiResponseText = response.data.text;
